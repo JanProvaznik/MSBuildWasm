@@ -3,7 +3,9 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.11.35005.142
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MSBuildWasm", "MSBuildWasm.csproj", "{135746F6-7E60-487A-AA7A-88EFF5A96802}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MSBuildWasm", "src\MSBuildWasm.csproj", "{135746F6-7E60-487A-AA7A-88EFF5A96802}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExampleProject", "examples\DotnetProjectUsingWasmTask\ExampleProject.csproj", "{B72FEC86-8BB7-49A4-B0D8-52D77EA31B0B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{135746F6-7E60-487A-AA7A-88EFF5A96802}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{135746F6-7E60-487A-AA7A-88EFF5A96802}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{135746F6-7E60-487A-AA7A-88EFF5A96802}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B72FEC86-8BB7-49A4-B0D8-52D77EA31B0B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B72FEC86-8BB7-49A4-B0D8-52D77EA31B0B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B72FEC86-8BB7-49A4-B0D8-52D77EA31B0B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B72FEC86-8BB7-49A4-B0D8-52D77EA31B0B}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

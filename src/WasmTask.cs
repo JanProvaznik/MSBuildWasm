@@ -6,7 +6,9 @@ using Wasmtime;
 
 #nullable disable
 
-public class WasmTask : Microsoft.Build.Utilities.Task
+namespace WasmWasiTasks
+{
+    public class WasmTask : Microsoft.Build.Utilities.Task
     {
         [Required]
         public string WasmFilePath { get; set; }
@@ -40,12 +42,13 @@ public class WasmTask : Microsoft.Build.Utilities.Task
                 string tmpPath = "tmp"; // TBD
                 if (EnableTmp)
                 {
-                    Directory.CreateDirectory(tmpPath);
-                    wasiConfigBuilder = wasiConfigBuilder.WithPreopenedDirectory(tmpPath, "tmp");
+                    var dir = Directory.CreateDirectory(tmpPath);
+                    wasiConfigBuilder = wasiConfigBuilder.WithPreopenedDirectory(dir.FullName, ".");
                 }
                 if (HomeDir != null)
                 {
-                    wasiConfigBuilder = wasiConfigBuilder.WithPreopenedDirectory(".", HomeDir);
+                    var dir = Directory.CreateDirectory("wasmtaskoutput");
+                    wasiConfigBuilder = wasiConfigBuilder.WithPreopenedDirectory(dir.FullName, "/out");
                 }
 
                 if (EnableIO)
@@ -79,18 +82,23 @@ public class WasmTask : Microsoft.Build.Utilities.Task
                 {
                     Directory.Delete("tmp", true);
                 }
+                if (EnableIO)
+                {
+                    // TODO unique filenames
+                    string output = File.ReadAllText("output.txt");
+                    string error = File.ReadAllText("error.txt");
+
+                    Log.LogMessage(MessageImportance.High, $"Output: {output}");
+                    Log.LogMessage(MessageImportance.Normal, $"Error: {error}");
+
+                    File.Delete("output.txt");
+                    File.Delete("error.txt");
+                }
             }
 
-            if (EnableIO)
-            {
-                string output = File.ReadAllText("output.txt");
-                string error = File.ReadAllText("error.txt");
-
-                Log.LogMessage(MessageImportance.Normal, $"Output: {output}");
-                Log.LogMessage(MessageImportance.Normal, $"Error: {error}");
-            }
 
             return true; // TBD return result of the function
         }
     }
+}
 

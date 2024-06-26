@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/MSBuildWasm.csproj" />
+  </ItemGroup>
+
+  <UsingTask TaskName="WasmWasiTasks.WasmTask" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
+
+<Target Name="RunWasm1" BeforeTargets="AfterBuild">
+		<WasmTask WasmFilePath="..\rust_hello\target\wasm32-wasi\release\rust_hello.wasm" EnableTmp="false" EnableIO="true" />
+	</Target>
+
+<Target Name="RunWasm2" BeforeTargets="AfterBuild">
+		<WasmTask WasmFilePath="..\rust_files\target\wasm32-wasi\release\rust_files.wasm" EnableTmp="true" HomeDir='yes' EnableIO="true" />
+	</Target>
+</Project>
