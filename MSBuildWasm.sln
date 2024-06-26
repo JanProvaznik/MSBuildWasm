@@ -5,7 +5,7 @@ VisualStudioVersion = 17.11.35005.142
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MSBuildWasm", "src\MSBuildWasm.csproj", "{135746F6-7E60-487A-AA7A-88EFF5A96802}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExampleProject", "examples\DotnetProjectUsingWasmTask\ExampleProject.csproj", "{B72FEC86-8BB7-49A4-B0D8-52D77EA31B0B}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExampleProject", "examples\ExampleProject\ExampleProject.csproj", "{B72FEC86-8BB7-49A4-B0D8-52D77EA31B0B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

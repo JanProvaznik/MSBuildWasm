@@ -8,11 +8,14 @@ using Wasmtime;
 
 namespace WasmWasiTasks
 {
-    public class WasmTask : Microsoft.Build.Utilities.Task
+    /// <summary>
+    /// Runs a task using wasmtime-dotnet API
+    /// </summary>
+    public class WasmTask : Microsoft.Build.Utilities.Task, IWasmTask
     {
-        [Required]
-        public string WasmFilePath { get; set; }
 
+        [Required]
+        public string WasmFilePath { get; set;}
         // public string[] Arguments { get; set; }
         // TBD
         public bool EnableTmp { get; set; } = false;
