@@ -1,5 +1,5 @@
 #[no_mangle]
-pub extern "C" fn execute()
+pub fn execute()
 {
-    println!("Hello, world! (From Rust Wasm task)");
+        println!("Hello from WebAssembly output");
 }

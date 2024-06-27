@@ -15,12 +15,17 @@
   <UsingTask TaskName="WasmWasiTasks.WasmExec" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
 
 <Target Name="RunWasm1" BeforeTargets="AfterBuild">
-		<WasmTask WasmFilePath="..\rust_hello\target\wasm32-wasi\release\rust_hello.wasm" EnableTmp="false" EnableIO="true" />
+		<WasmTask WasmFilePath="..\rust_template\target\wasm32-wasi\release\rust_template.wasm" EnableTmp="false" EnableIO="true" />
 	</Target>
-
+  
 <Target Name="RunWasm2" BeforeTargets="AfterBuild">
 		<WasmTask WasmFilePath="..\rust_files\target\wasm32-wasi\release\rust_files.wasm" EnableTmp="true" HomeDir='yes' EnableIO="true" />
 	</Target>
+  
+<Target Name="RunWasm3" BeforeTargets="AfterBuild">
+		<WasmTask WasmFilePath="..\rust_hello\target\wasm32-wasi\release\rust_hello.wasm" EnableTmp="true" HomeDir='yes' EnableIO="true" />
+	</Target>
+
 <Target Name="WasmExec" BeforeTargets="AfterBuild">
 		<WasmExec WasmFilePath="..\rust_executable\target\wasm32-wasi\release\rust_executable.wasm" WasmtimeArgs="" />
 	</Target>
