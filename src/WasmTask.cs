@@ -28,6 +28,18 @@ namespace MSBuildWasm
         public bool EnableIO { get; set; } = true;
 
 
+        readonly string outputPath = Path.GetFullPath("output.txt");
+        readonly string errorPath = Path.GetFullPath("output.txt");
+        readonly string tmpPath = Path.GetFullPath("tmp");
+
+        const string executeFunctionName = "execute";
+        const string outDirName = "wasmtaskoutput";
+
+        public WasmTask()
+        {
+
+        }
+
         public override bool Execute()
         {
             try
@@ -51,14 +63,13 @@ namespace MSBuildWasm
                 }
                 if (HomeDir != null)
                 {
-                    var dir = Directory.CreateDirectory("wasmtaskoutput");
+                    var dir = Directory.CreateDirectory(outDirName);
                     wasiConfigBuilder = wasiConfigBuilder.WithPreopenedDirectory(dir.FullName, "/out");
                 }
-
                 if (EnableIO)
                 {
-                    wasiConfigBuilder = wasiConfigBuilder.WithStandardOutput("output.txt")
-                                                         .WithStandardError("error.txt");
+                    wasiConfigBuilder = wasiConfigBuilder.WithStandardOutput(outputPath)
+                                                         .WithStandardError(errorPath);
                 }
 
                 using var store = new Store(engine);
@@ -67,7 +78,11 @@ namespace MSBuildWasm
 
 
                 Instance instance = linker.Instantiate(store, module);
-                Action fn = instance.GetAction("execute"); // TBD parameters
+                Action fn = instance.GetAction(executeFunctionName);
+                //dynamic instance =
+
+                //var instancedifferent = instance.GetFunction();
+
 
                 if (fn == null)
                 {
@@ -86,19 +101,24 @@ namespace MSBuildWasm
             {
                 if (EnableTmp)
                 {
-                    Directory.Delete("tmp", true);
+                    Directory.Delete(tmpPath, true);
                 }
                 if (EnableIO)
                 {
                     // TODO unique filenames
-                    string output = File.ReadAllText("output.txt");
-                    string error = File.ReadAllText("error.txt");
+                    if (File.Exists(outputPath))
+                    {
+                        string output = File.ReadAllText(outputPath);
+                        Log.LogMessage(MessageImportance.High, $"Output: {output}");
+                        File.Delete(outputPath);
+                    }
 
-                    Log.LogMessage(MessageImportance.High, $"Output: {output}");
-                    Log.LogMessage(MessageImportance.Normal, $"Error: {error}");
-
-                    File.Delete("output.txt");
-                    File.Delete("error.txt");
+                    if (File.Exists(errorPath))
+                    {
+                        string error = File.ReadAllText(errorPath);
+                        Log.LogMessage(MessageImportance.Normal, $"Error: {error}");
+                        File.Delete(errorPath);
+                    }
                 }
             }
 

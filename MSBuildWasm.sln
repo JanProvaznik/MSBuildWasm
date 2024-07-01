@@ -9,8 +9,6 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExampleProject", "examples\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WasmTasksTests", "test\WasmTasksTests\WasmTasksTests.csproj", "{94FE5153-34D6-4F93-9792-7408AD89945D}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Playground", "Playground\Playground.csproj", "{047F357B-00C5-49E1-B577-A17D5CFBD02E}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -29,10 +27,6 @@ Global
 		{94FE5153-34D6-4F93-9792-7408AD89945D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{94FE5153-34D6-4F93-9792-7408AD89945D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{94FE5153-34D6-4F93-9792-7408AD89945D}.Release|Any CPU.Build.0 = Release|Any CPU
-		{047F357B-00C5-49E1-B577-A17D5CFBD02E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{047F357B-00C5-49E1-B577-A17D5CFBD02E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{047F357B-00C5-49E1-B577-A17D5CFBD02E}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{047F357B-00C5-49E1-B577-A17D5CFBD02E}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
