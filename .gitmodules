@@ -1,0 +1,3 @@
+[submodule "msbuild"]
+	path = msbuild
+	url = https://github.com/dotnet/msbuild

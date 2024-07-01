@@ -10,7 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Build.Framework;
 
-namespace WasmWasiTasks
+namespace MSBuildWasm 
 {
     public class WasmExec : Microsoft.Build.Utilities.Task, IWasmTask
     {

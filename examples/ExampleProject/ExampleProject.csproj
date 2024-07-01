@@ -11,8 +11,8 @@
     <ProjectReference Include="../../src/MSBuildWasm.csproj" />
   </ItemGroup>
 
-  <UsingTask TaskName="WasmWasiTasks.WasmTask" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
-  <UsingTask TaskName="WasmWasiTasks.WasmExec" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
+  <UsingTask TaskName="MSBuildWasm.WasmTask" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
+  <UsingTask TaskName="MSBuildWasm.WasmExec" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
 
 <Target Name="RunWasm1" BeforeTargets="AfterBuild">
 		<WasmTask WasmFilePath="..\rust_template\target\wasm32-wasi\release\rust_template.wasm" EnableTmp="false" EnableIO="true" />
