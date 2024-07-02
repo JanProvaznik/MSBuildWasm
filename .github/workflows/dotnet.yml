@@ -28,7 +28,8 @@ jobs:
     - name: install standalone wasmtime
       run: |
         curl https://wasmtime.dev/install.sh -sSf | bash
-        echo "::add-path::$HOME/.wasmtime/bin"
+        echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
+        export PATH=$HOME/.wasmtime/bin:$PATH
         wasmtime --version
     - name: build MSBuild for unit test .dll
       run: ./msbuild/build.sh
