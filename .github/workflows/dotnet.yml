@@ -20,18 +20,20 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 8.0.201
+        dotnet-version: 8.0.x
     - name: Initialize submodules
       run: |
         git submodule init
         git submodule update
-
+    - name: install standalone wasmtime
+      run: curl https://wasmtime.dev/install.sh -sSf | bash
     - name: build MSBuild for unit test .dll
       run: ./msbuild/build.sh
     - name: Restore dependencies
       run: dotnet restore
     - name: Publish
-      run:
-        dotnet publish
+      run: dotnet publish src
     - name: Test
-      run: dotnet test --no-build 
+      run: dotnet test
+    - name: Examples
+      run: dotnet build examples
