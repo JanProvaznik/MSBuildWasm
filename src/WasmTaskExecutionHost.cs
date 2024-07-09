@@ -6,11 +6,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using Microsoft.Build.Framework;
 
 namespace MSBuildWasm
 {
-    public interface IWasmTask : ITask
+    internal class WasmTaskExecutionHost 
     {
+        // from MSBuild repo, its internal logic...
     }
 }

@@ -11,10 +11,16 @@
     <ProjectReference Include="../../src/MSBuildWasm.csproj" />
   </ItemGroup>
 
-  <UsingTask TaskName="MSBuildWasm.WasmTask" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
+  <UsingTask TaskName="MSBuildWasm.WasmBasicTask" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
   <UsingTask TaskName="MSBuildWasm.WasmExec" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
+  <UsingTask TaskName="MyNewFancyTask" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory" Runtime="Wasm" Architecture="x86" >
+    <ParameterGroup>
+      <AnotherParam>AAAAAAAAAAAA</AnotherParam>
+    </ParameterGroup>
+    <Task>..\rust_template\target\wasm32-wasi\release\rust_template.wasm</Task>
+  </UsingTask>
 
-<Target Name="RunWasm1" BeforeTargets="AfterBuild">
+  <!--<Target Name="RunWasm1" BeforeTargets="AfterBuild">
 		<WasmTask WasmFilePath="..\rust_template\target\wasm32-wasi\release\rust_template.wasm" EnableTmp="false" EnableIO="true" />
 	</Target>
   
@@ -28,5 +34,11 @@
 
 <Target Name="WasmExec" BeforeTargets="AfterBuild">
 		<WasmExec WasmFilePath="..\rust_executable\target\wasm32-wasi\release\rust_executable.wasm" WasmtimeArgs="" />
-	</Target>
+	</Target>-->
+
+  <Target Name="Fancytask" BeforeTargets="AfterBuild">
+    <MyNewFancyTask TestRequiredProperty="hello">
+      <Output TaskParameter="TestOutputProperty" PropertyName="OutputProperty"/>
+    </MyNewFancyTask>
+  </Target>
 </Project>

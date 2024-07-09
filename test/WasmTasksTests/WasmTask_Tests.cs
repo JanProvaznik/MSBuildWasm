@@ -16,7 +16,7 @@ namespace WasmTasksTests
         [Fact]
         public void ExecuteTemplate_WithDefaultSettings_ShouldSucceed()
         {
-            IWasmTask task = new WasmTask {
+            IWasmTask task = new WasmBasicTask {
                 BuildEngine = new MockEngine(),
                 WasmFilePath = "../../../../../examples/rust_template/target/wasm32-wasi/release/rust_template.wasm"
             };
