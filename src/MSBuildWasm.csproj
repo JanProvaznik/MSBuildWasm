@@ -5,13 +5,13 @@
     <AssemblyName>MSBuildWasm</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
-	
-	<ItemGroup>
-		<PackageReference Include="Microsoft.Build" Version="17.10.4" />
-		<PackageReference Include="Microsoft.Build.Tasks.Core" Version="17.10.4" />
-		<PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.10.4" />
-		<PackageReference Include="Microsoft.Build.Framework" Version="17.10.4" />
-		<PackageReference Include="Wasmtime" Version="19.0.1"/>
-	</ItemGroup>
-	
+  
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Build" Version="17.10.4" />
+    <PackageReference Include="Microsoft.Build.Tasks.Core" Version="17.10.4" />
+    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.10.4" />
+    <PackageReference Include="Microsoft.Build.Framework" Version="17.10.4" />
+    <PackageReference Include="Wasmtime" Version="22.0.0"/>
+  </ItemGroup>
+
 </Project>

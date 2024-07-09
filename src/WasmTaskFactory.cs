@@ -22,26 +22,27 @@ using System.Text.Json;
 
 namespace MSBuildWasm
 {
+    /// <summary>
+    /// Class which builds a type for a Task from a Wasm module and instantiates it.
+    /// </summary>
     public class WasmTaskFactory : ITaskFactory2
     {
         public string FactoryName => "WasmTaskFactory";
-        private TaskPropertyInfo[] _parameters;
+        private TaskPropertyInfo[] _taskParameters;
         private TaskLoggingHelper _log;
         private string _taskName;
         private string _taskPath;
+        private IDictionary<string, string> _executionProperties;
 
         public WasmTaskFactory()
         {
-            Debugger.Launch();
         }
 
-        public Type TaskType { get; private set; } 
+        public Type TaskType { get; private set; }
 
         public void CleanupTask(ITask task)
         {
-            // the task might have gotten a temp directory as execution home, delete it here
         }
-
         public ITask CreateTask(IBuildEngine taskFactoryLoggingHost)
         {
             var taskInstance = Activator.CreateInstance(TaskType) as WasmTask;
@@ -51,8 +52,9 @@ namespace MSBuildWasm
 
         public TaskPropertyInfo[] GetTaskParameters()
         {
-            return _parameters;
+            return _taskParameters;
         }
+
         public bool Initialize(string taskName, IDictionary<string, string> factoryIdentityParameters, IDictionary<string, TaskPropertyInfo> parameterGroup, string taskBody, IBuildEngine taskFactoryLoggingHost)
         {
             _log = new TaskLoggingHelper(taskFactoryLoggingHost, taskName)
@@ -60,10 +62,12 @@ namespace MSBuildWasm
                 HelpKeywordPrefix = $"WasmTask.{taskName}."
             };
             _taskName = taskName;
-           _taskPath = Path.GetFullPath(taskBody);
+            _taskPath = Path.GetFullPath(taskBody);
             // TODO parameters setting up the env
 
-            BuildTaskType(parameterGroup);
+            GetWasmTaskProperties(); 
+
+            TaskType = BuildTaskType();
 
             return true;
         }
@@ -75,64 +79,56 @@ namespace MSBuildWasm
         public ITask CreateTask(IBuildEngine taskFactoryLoggingHost, IDictionary<string, string> taskIdentityParameters) => CreateTask(taskFactoryLoggingHost);
 
         /// <summary>
-        /// This method loads the wasm module, links  without io and executes the function GetTaskInfo which callbacks with a string of json that describes the properties of the task
+        /// Creates the type for the Task using reflection.
         /// </summary>
-        /// <param name="parameterGroup">This sets the env</param>
-        /// <param name="taskBody">.wasm file path</param>
-        private void BuildTaskType(IDictionary<string, TaskPropertyInfo> parameterGroup)
+        private Type BuildTaskType()
         {
             var assemblyName = new AssemblyName("DynamicWasmTasks");
             var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
             var moduleBuilder = assemblyBuilder.DefineDynamicModule("MainModule");
-            //var simpletypebuilder = moduleBuilder.DefineType()
 
             var typeBuilder = moduleBuilder.DefineType(_taskName, TypeAttributes.Public, typeof(WasmTask));
 
-            // get from module what properties
-
-            GetWasmTaskProperties(_taskPath);
-
-            foreach (var param in _parameters)
+            foreach (var param in _taskParameters)
             {
                 DefineProperty(typeBuilder, param);
             }
 
-            TaskType = typeBuilder.CreateType();
+            return typeBuilder.CreateType();
         }
 
-        private void GetWasmTaskProperties(string wasmPath)
+        /// <summary>
+        /// Causes _properties to be updated with Task Properties from the WebAssembly module.
+        /// </summary>
+        /// <param name="wasmPath"></param>
+        private void GetWasmTaskProperties()
         {
             try
             {
                 using var engine = new Engine();
-                using var module = Wasmtime.Module.FromFile(engine, wasmPath);
+                using var module = Wasmtime.Module.FromFile(engine, _taskPath);
                 using var linker = new Linker(engine);
-                linker.DefineWasi(); // important and not documented clearly in wasmtime-dotnet!
-
-                var wasiConfigBuilder = new WasiConfiguration();
-
                 using var store = new Store(engine);
-                store.SetWasiConfiguration(wasiConfigBuilder);
-                LinkLogFunctions(linker, store);
+                linker.DefineWasi();
+                LinkRequiredCallbacks(linker, store);
                 LinkTaskInfo(linker, store);
-                LinkOutputGathering(linker, store);
                 Instance instance = linker.Instantiate(store, module);
-                Action fn = instance.GetAction("GetTaskInfo");
-                if (fn == null)
+                Action getTaskInfo = instance.GetAction("GetTaskInfo");
+                if (getTaskInfo == null)
                 {
                     _log.LogError("Function 'GetTaskInfo' not found in the WebAssembly module.");
                     return;
                 }
 
-                fn.Invoke();
+                getTaskInfo.Invoke();
             }
-            catch (Exception ex)
+            catch (WasmtimeException ex)
             {
                 _log.LogErrorFromException(ex, true);
             }
         }
 
-        // todo figure out requried and output annotation
+        // TODO figure out Requried and Output annotation
         private void DefineProperty(TypeBuilder typeBuilder, TaskPropertyInfo param)
         {
             var fieldBuilder = typeBuilder.DefineField($"_{param.Name}", param.PropertyType, FieldAttributes.Private);
@@ -167,8 +163,12 @@ namespace MSBuildWasm
 
         }
 
-
-        private TaskPropertyInfo[] JsonToProperties(string json)
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="json"></param>
+        /// <returns></returns>
+        private TaskPropertyInfo[] ConvertJsonTaskInfoToProperties(string json)
         {
             var taskPropertyInfos = new List<TaskPropertyInfo>();
 
@@ -186,7 +186,7 @@ namespace MSBuildWasm
                     bool required = value.GetProperty("required").GetBoolean();
                     bool output = value.GetProperty("output").GetBoolean();
 
-                    Type propertyType = GetTypeFromString(type);
+                    Type propertyType = ConvertStringToType(type);
 
                     taskPropertyInfos.Add(new TaskPropertyInfo(name, propertyType, output, required));
                 }
@@ -195,7 +195,7 @@ namespace MSBuildWasm
             return taskPropertyInfos.ToArray();
         }
 
-        private Type GetTypeFromString(string type)
+        private Type ConvertStringToType(string type)
         {
             return type.ToLower() switch
             {
@@ -206,80 +206,24 @@ namespace MSBuildWasm
             };
         }
 
-        protected void LinkTaskInfo(Linker linker, Store store)
+        private void LinkTaskInfo(Linker linker, Store store)
         {
             linker.Define("msbuild-taskinfo", "TaskInfo", Function.FromCallback(store, (Caller caller, int address, int length) =>
             {
-                var memory = caller.GetMemory("memory");
-                if (memory == null)
-                {
-                    throw new Exception("WebAssembly module did not export a memory.");
-                }
-
+                var memory = caller.GetMemory("memory") ?? throw new Exception("WebAssembly module did not export a memory.");
                 var propertiesString = memory.ReadString(address, length);
-                // sets the parameters for this class
-                _parameters = JsonToProperties(propertiesString);
-
+                _taskParameters = ConvertJsonTaskInfoToProperties(propertiesString);
             }));
 
         }
-
-        protected void LinkLogFunctions(Linker linker, Store store)
+        // when running a module these functions have to be exported by the host but in the factory we run it only to get TaskProperties
+        private void LinkRequiredCallbacks(Linker linker, Store store)
         {
-            linker.Define("msbuild-log", "LogMessage", Function.FromCallback(store, (Caller caller, int importance, int address, int length) =>
-            {
-                var memory = caller.GetMemory("memory");
-                if (memory == null)
-                {
-                    throw new Exception("WebAssembly module did not export a memory.");
-                }
-
-                var message = memory.ReadString(address, length);
-                _log.LogMessage(WasmTask.ImportanceFromInt(importance), message);
-            }));
-
-            linker.Define("msbuild-log", "LogError", Function.FromCallback(store, (Caller caller, int address, int length) =>
-            {
-                var memory = caller.GetMemory("memory");
-                if (memory == null)
-                {
-                    throw new Exception("WebAssembly module did not export a memory.");
-                }
-
-                var message = memory.ReadString(address, length);
-                _log.LogError(message);
-            }));
-
-            linker.Define("msbuild-log", "LogWarning", Function.FromCallback(store, (Caller caller, int address, int length) =>
-            {
-                var memory = caller.GetMemory("memory");
-                if (memory == null)
-                {
-                    throw new Exception("WebAssembly module did not export a memory.");
-                }
-
-                var message = memory.ReadString(address, length);
-                _log.LogWarning(message);
-            }));
-
+            linker.Define("msbuild-log", "LogMessage", Function.FromCallback(store, (Caller caller, int importance, int address, int length) => { }));
+            linker.Define("msbuild-log", "LogError", Function.FromCallback(store, (Caller caller, int address, int length) => { }));
+            linker.Define("msbuild-log", "LogWarning", Function.FromCallback(store, (Caller caller, int address, int length) => { }));
+            linker.Define("msbuild-output", "Output", Function.FromCallback(store, (Caller caller, int address, int length) => { }));
         }
-
-        protected void LinkOutputGathering(Linker linker, Store store)
-        {
-            linker.Define("msbuild-output", "Output", Function.FromCallback(store, (Caller caller, int address, int length) =>
-            {
-                var memory = caller.GetMemory("memory");
-                if (memory == null)
-                {
-                    throw new Exception("WebAssembly module did not export a memory.");
-                }
-
-                var output = memory.ReadString(address, length);
-
-            }));
-        }
-
-
 
     }
 }

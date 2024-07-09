@@ -15,7 +15,7 @@ namespace MSBuildWasm
     {
 
         [Required]
-        public string WasmFilePath { get; set; }
+        public new string WasmFilePath { get; set; }
         // public string[] Arguments { get; set; }
         // TBD
         public bool EnableTmp { get; set; } = false;
@@ -75,6 +75,8 @@ namespace MSBuildWasm
                 using var store = new Store(engine);
                 store.SetWasiConfiguration(wasiConfigBuilder);
                 LinkLogFunctions(linker, store);
+                LinkOutputGathering(linker, store);
+                LinkTaskInfo(linker, store);
 
 
                 Instance instance = linker.Instantiate(store, module);

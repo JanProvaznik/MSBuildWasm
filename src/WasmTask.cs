@@ -100,13 +100,11 @@ namespace MSBuildWasm
         {
 
             var propertiesToSerialize = GetType()
-    .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-    .Where(p => !BlacklistedProperties.Contains(p.Name) &&
-                (p.PropertyType == typeof(string) || p.PropertyType == typeof(bool)))
-    .ToDictionary(p => p.Name, p => p.GetValue(this));
+                                        .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                                        .Where(p => !BlacklistedProperties.Contains(p.Name) && (p.PropertyType == typeof(string) || p.PropertyType == typeof(bool)))
+                                        .ToDictionary(p => p.Name, p => p.GetValue(this));
 
             return JsonSerializer.Serialize(propertiesToSerialize);
-
 
         }
         private bool ExtractOutputs()
@@ -198,16 +196,10 @@ namespace MSBuildWasm
         }
         protected void LinkTaskInfo(Linker linker, Store store)
         {
-            linker.Define("msbuild-taskinfo", "TaskInfo", Function.FromCallback(store, (Caller caller, int address, int length) =>
-            {
-                // nothing in execution
-            }));
-
+            linker.Define("msbuild-taskinfo", "TaskInfo", Function.FromCallback(store, (Caller caller, int address, int length) => { /* nothing in execution */ }));
         }
 
 
-        //private void ReflectJson(string taskOutput)
-        ////{
         //    // the json is in the form of a dictionary of output properties P
         //    // Read all keys of the json, values can be strings, dict<string,string>, or bool, and lists of these things
         //    // implement only string variant for now
@@ -216,9 +208,10 @@ namespace MSBuildWasm
         //    // foreach prop in P
         //    // set R to value(P) if P=R
 
-
-        //}
-
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="taskOutput">Output</param>
         private void ReflectJson(string taskOutput)
         {
             try
@@ -275,18 +268,6 @@ namespace MSBuildWasm
                 Log.LogError($"Error in ReflectJson: {ex.Message}");
             }
         }
-
-
-        protected void LinkInputGathering()
-        {
-
-        }
-
-        private void JsonToProperties(string json)
-        {
-
-        }
-
 
     }
 }
