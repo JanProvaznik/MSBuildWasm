@@ -14,7 +14,7 @@ using Wasmtime;
 
 namespace MSBuildWasm
 {
-    public class WasmTask : Microsoft.Build.Utilities.Task, IWasmTask
+    public abstract class WasmTask : Microsoft.Build.Utilities.Task, IWasmTask
     {
         const string ExecuteFunctionName = "execute";
         public string WasmFilePath { get; set; }
@@ -30,14 +30,13 @@ namespace MSBuildWasm
 
         public override bool Execute()
         {
-            Debugger.Launch();
             return ExecuteWasm();
         }
         private bool ExecuteWasm()
         {
             using var engine = new Engine();
             var wasiConfigBuilder = new WasiConfiguration();
-
+            // TODO env setup and files...
             //if (InheritEnv)
             //{
             //    wasiConfigBuilder = wasiConfigBuilder.WithInheritedEnvironment();
@@ -120,10 +119,6 @@ namespace MSBuildWasm
         /// </summary>
         /// <param name="value"></param>
         /// <returns></returns>
-
-
-
-
         public static MessageImportance ImportanceFromInt(int value)
         {
             switch (value)

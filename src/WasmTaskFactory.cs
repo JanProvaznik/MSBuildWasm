@@ -28,15 +28,14 @@ namespace MSBuildWasm
         private TaskPropertyInfo[] _parameters;
         private TaskLoggingHelper _log;
         private string _taskName;
-        private Type _taskType;
+        private string _taskPath;
 
         public WasmTaskFactory()
         {
             Debugger.Launch();
         }
 
-
-        public Type TaskType { get; private set; } = typeof(WasmTask);
+        public Type TaskType { get; private set; } 
 
         public void CleanupTask(ITask task)
         {
@@ -45,8 +44,9 @@ namespace MSBuildWasm
 
         public ITask CreateTask(IBuildEngine taskFactoryLoggingHost)
         {
-            return Activator.CreateInstance(_taskType) as ITask;
-            //return task;
+            var taskInstance = Activator.CreateInstance(TaskType) as WasmTask;
+            taskInstance.WasmFilePath = _taskPath;
+            return taskInstance;
         }
 
         public TaskPropertyInfo[] GetTaskParameters()
@@ -55,16 +55,15 @@ namespace MSBuildWasm
         }
         public bool Initialize(string taskName, IDictionary<string, string> factoryIdentityParameters, IDictionary<string, TaskPropertyInfo> parameterGroup, string taskBody, IBuildEngine taskFactoryLoggingHost)
         {
-            //Debugger.Launch();
-
             _log = new TaskLoggingHelper(taskFactoryLoggingHost, taskName)
             {
-                //TaskResources = AssemblyResources.PrimaryResources this was in msbuild ???
                 HelpKeywordPrefix = $"WasmTask.{taskName}."
             };
             _taskName = taskName;
-            //_parameters = parameterGroup.Values.ToArray();
-            BuildTaskType(parameterGroup, taskBody);
+           _taskPath = Path.GetFullPath(taskBody);
+            // TODO parameters setting up the env
+
+            BuildTaskType(parameterGroup);
 
             return true;
         }
@@ -80,7 +79,7 @@ namespace MSBuildWasm
         /// </summary>
         /// <param name="parameterGroup">This sets the env</param>
         /// <param name="taskBody">.wasm file path</param>
-        private void BuildTaskType(IDictionary<string, TaskPropertyInfo> parameterGroup, string taskBody)
+        private void BuildTaskType(IDictionary<string, TaskPropertyInfo> parameterGroup)
         {
             var assemblyName = new AssemblyName("DynamicWasmTasks");
             var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
@@ -91,23 +90,14 @@ namespace MSBuildWasm
 
             // get from module what properties
 
-            GetWasmTaskProperties(taskBody);
+            GetWasmTaskProperties(_taskPath);
 
             foreach (var param in _parameters)
             {
                 DefineProperty(typeBuilder, param);
             }
 
-            try
-            {
-            _taskType = typeBuilder.CreateType();
-                object o = Activator.CreateInstance(_taskType);
-                Console.WriteLine();
-            }catch (Exception e)
-            {
-
-            }
-            Console.WriteLine("");
+            TaskType = typeBuilder.CreateType();
         }
 
         private void GetWasmTaskProperties(string wasmPath)

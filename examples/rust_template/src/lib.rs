@@ -41,10 +41,7 @@ pub fn execute() -> TaskResult
         // read inputs from the environment variable MSBuildInput, it's a json string
         let input_json = std::env::var("MSBuildInput").unwrap();
 
-
-
-
-        // read information about and MSBuildEnv
+        // read information about env from MSBuildEnv
         // TODO
 
         println!("Hello from WebAssembly output");
@@ -63,8 +60,6 @@ pub fn execute() -> TaskResult
             LogMessage(MessageImportance::Low, message3.as_ptr(), message3.to_bytes().len());
             Output(out_json_str.as_ptr(), out_json_str.to_bytes().len());
         }
-
-        
 
         return TaskResult::Success;
 }
