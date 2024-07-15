@@ -1,7 +1,4 @@
-﻿// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
@@ -12,16 +9,20 @@ using Microsoft.Build.UnitTests;
 using Microsoft.Build;
 using Shouldly;
 using System.Diagnostics;
+using Xunit;
 
 namespace WasmTasksTests
 {
     public class WasmTaskFactory_Tests
     {
 
-        [Fact]
-        public void E2E()
+        // [Fact]
+        public void E2E_Template()
         {
-            Environment.SetEnvironmentVariable("MSBuildDebugUnitTests", "1");
+            const string pathToWasmDLL = @"";
+            const string taskPath = @"";
+            const string pathToMSBuild = @"";
+
             using (TestEnvironment env = TestEnvironment.Create())
             {
                 TransientTestFolder folder = env.CreateFolder(createFolder: true);
@@ -29,19 +30,18 @@ namespace WasmTasksTests
                 TransientTestFile inlineTask = env.CreateFile(folder, "5107.proj", @$"
 <Project>
 
-  <UsingTask TaskName=""NewWasmTask"" TaskFactory=""WasmTaskFactory"" AssemblyFile=""C:\Users\t-jprovaznk\dev\MSBuildWasm\src\bin\Debug\net8.0\MSBuildWasm.dll"">
-    <Task>a.wasm</Task>
+  <UsingTask TaskName=""MyNewFancyTask"" AssemblyFile=""{pathToWasmDLL}"" TaskFactory=""WasmTaskFactory"">
+    <Task>{taskPath}</Task>
   </UsingTask>
 
 <Target Name=""ToRun"">
-  <NewWasmTask/>
+  <MyNewFancyTask/>
 </Target>
 
 </Project>
 ");
-                //Debugger.Launch();
-                string output = RunnerUtilities.ExecMSBuild(@"C:\Users\t-jprovaznk\OneDrive - Microsoft\dev\MSBuild\artifacts\bin\bootstrap\net8.0\MSBuild\Current\Bin\MSBuild.exe", inlineTask.Path, out bool success);
-                success.ShouldBeTrue(output);
+                // Run MSBuild and assert it's successful
+                // TODO
             }
         }
 

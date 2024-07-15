@@ -65,7 +65,7 @@ namespace MSBuildWasm
             _taskPath = Path.GetFullPath(taskBody);
             // TODO parameters setting up the env
 
-            GetWasmTaskProperties(); 
+            GetWasmTaskProperties();
 
             TaskType = BuildTaskType();
 
@@ -222,7 +222,6 @@ namespace MSBuildWasm
             linker.Define("msbuild-log", "LogMessage", Function.FromCallback(store, (Caller caller, int importance, int address, int length) => { }));
             linker.Define("msbuild-log", "LogError", Function.FromCallback(store, (Caller caller, int address, int length) => { }));
             linker.Define("msbuild-log", "LogWarning", Function.FromCallback(store, (Caller caller, int address, int length) => { }));
-            linker.Define("msbuild-output", "Output", Function.FromCallback(store, (Caller caller, int address, int length) => { }));
         }
 
     }

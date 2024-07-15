@@ -75,24 +75,20 @@ namespace MSBuildWasm
                 using var store = new Store(engine);
                 store.SetWasiConfiguration(wasiConfigBuilder);
                 LinkLogFunctions(linker, store);
-                LinkOutputGathering(linker, store);
                 LinkTaskInfo(linker, store);
 
 
                 Instance instance = linker.Instantiate(store, module);
                 Action fn = instance.GetAction(executeFunctionName);
-                //dynamic instance =
-
-                //var instancedifferent = instance.GetFunction();
-
 
                 if (fn == null)
                 {
-                    Log.LogError("Function 'execute' not found in the WebAssembly module.");
+                    Log.LogError($"Function {executeFunctionName} not found in {WasmFilePath}");
                     return false;
                 }
 
                 fn.Invoke();
+                store.Dispose();
             }
             catch (Exception ex)
             {

@@ -8,21 +8,29 @@ using MSBuildWasm;
 using Xunit;
 using Shouldly;
 using Microsoft.Build.UnitTests;
+using System.Reflection;
 
 namespace WasmTasksTests
 {
     public class WasmTask_Tests
     {
-        [Fact]
-        public void ExecuteTemplate_WithDefaultSettings_ShouldSucceed()
+        public class TemplateWasmTask : WasmTask
         {
-            IWasmTask task = new WasmBasicTask {
-                BuildEngine = new MockEngine(),
-                WasmFilePath = "../../../../../examples/rust_template/target/wasm32-wasi/release/rust_template.wasm"
-            };
+            public TemplateWasmTask() : base()
+            {
+                // set some default values
+                WasmFilePath = "../../../../../examples/rust_template/target/wasm32-wasi/release/rust_template.wasm";
+                BuildEngine = new MockEngine();
+            }
+        }
+        [Fact]
+        public void ExecuteTemplate_ShouldSucceed()
+        {
+            var task = new TemplateWasmTask();
             
             task.Execute().ShouldBeTrue();
         }
+
 
     }
 }
