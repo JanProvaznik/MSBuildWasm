@@ -37,8 +37,8 @@ pub fn Execute() -> TaskResult
         std::io::stdin().read_line(&mut input).unwrap();
 
         // let errorMessage = CString::new("Error message from Wasm").unwrap(); // we don't want the template task failing
-        let warning_message = CString::new("Warning message from Wasm").unwrap();
-        let message1 = CString::new(input).unwrap();
+        let warning_message= CString::new(input).unwrap();
+        let message1= CString::new("High priority message from Wasm").unwrap();
         let message2 = CString::new("Normal priority message from Wasm").unwrap();
         let message3 = CString::new("Low priority message from Wasm").unwrap();
         let out_json_str = CString::new(r#"{"TestOutputProperty":"This is the output property value from WASM task"}"#).unwrap();
@@ -59,7 +59,7 @@ pub fn Execute() -> TaskResult
 #[no_mangle]
 pub fn GetTaskInfo() 
 {
-    let c_string = CString::new(r#"{"Properties":{"TestNormalProperty":{"type":"string","required":false,"output":false},"TestOutputProperty":{"type":"string","required":false,"output":true},"TestRequiredProperty":{"type":"string","required":true,"output":false},"TestBoolProperty":{"type":"bool","required":false,"output":false}}}"#).unwrap();
+    let c_string = CString::new(r#"{"Properties":{"TestNormalProperty":{"type":"string","required":false,"output":false},"TestOutputProperty":{"type":"string","required":false,"output":true},"TestRequiredProperty":{"type":"string","required":true,"output":false},"TestBoolProperty":{"type":"bool","required":false,"output":false},"TestITaskItemProperty":{"type":"ITaskItem","required":false,"output":false}}}"#).unwrap();
     unsafe 
     {
     TaskInfo(c_string.as_ptr(), c_string.to_bytes().len());

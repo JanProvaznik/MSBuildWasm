@@ -1,21 +1,9 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System;
-using System.Collections.Generic;
 using System.Reflection;
-#if FEATURE_APPDOMAIN
-using System.Threading.Tasks;
-#endif
-
-using Microsoft.Build.BackEnd.Components.RequestBuilder;
 using Microsoft.Build.Framework;
-using Microsoft.Build.Shared;
-using System.IO;
-using ElementLocation = Microsoft.Build.Construction.ElementLocation;
 using Microsoft.Build.Utilities;
-using System.Diagnostics;
-using System.Reflection.Metadata.Ecma335;
 using System.Reflection.Emit;
 using Wasmtime;
 using System.Text.Json;
@@ -63,7 +51,9 @@ namespace MSBuildWasm
             };
             _taskName = taskName;
             _taskPath = Path.GetFullPath(taskBody);
-            // TODO parameters setting up the env
+
+            // TODO: semantics for this
+            _executionProperties = factoryIdentityParameters;
 
             GetWasmTaskProperties();
 
@@ -85,11 +75,11 @@ namespace MSBuildWasm
         {
             var assemblyName = new AssemblyName("DynamicWasmTasks");
             var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
-            var moduleBuilder = assemblyBuilder.DefineDynamicModule("MainModule");
+            ModuleBuilder moduleBuilder = assemblyBuilder.DefineDynamicModule("MainModule");
 
-            var typeBuilder = moduleBuilder.DefineType(_taskName, TypeAttributes.Public, typeof(WasmTask));
+            TypeBuilder typeBuilder = moduleBuilder.DefineType(_taskName, TypeAttributes.Public, typeof(WasmTask));
 
-            foreach (var param in _taskParameters)
+            foreach (TaskPropertyInfo param in _taskParameters)
             {
                 DefineProperty(typeBuilder, param);
             }
@@ -128,31 +118,30 @@ namespace MSBuildWasm
             }
         }
 
-        // TODO figure out Requried and Output annotation
-        private void DefineProperty(TypeBuilder typeBuilder, TaskPropertyInfo param)
+        private static void DefineProperty(TypeBuilder typeBuilder, TaskPropertyInfo param)
         {
-            var fieldBuilder = typeBuilder.DefineField($"_{param.Name}", param.PropertyType, FieldAttributes.Private);
+            FieldBuilder fieldBuilder = typeBuilder.DefineField($"_{param.Name}", param.PropertyType, FieldAttributes.Private);
 
-            var propertyBuilder = typeBuilder.DefineProperty(param.Name, PropertyAttributes.HasDefault, param.PropertyType, null);
+            PropertyBuilder propertyBuilder = typeBuilder.DefineProperty(param.Name, PropertyAttributes.HasDefault, param.PropertyType, null);
 
-            var getMethodBuilder = typeBuilder.DefineMethod(
+            MethodBuilder getMethodBuilder = typeBuilder.DefineMethod(
                 $"get_{param.Name}",
                 MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
                 param.PropertyType,
                 Type.EmptyTypes);
 
-            var getIL = getMethodBuilder.GetILGenerator();
+            ILGenerator getIL = getMethodBuilder.GetILGenerator();
             getIL.Emit(OpCodes.Ldarg_0);
             getIL.Emit(OpCodes.Ldfld, fieldBuilder);
             getIL.Emit(OpCodes.Ret);
 
-            var setMethodBuilder = typeBuilder.DefineMethod(
+            MethodBuilder setMethodBuilder = typeBuilder.DefineMethod(
                 $"set_{param.Name}",
                 MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
                 null,
                 new[] { param.PropertyType });
 
-            var setIL = setMethodBuilder.GetILGenerator();
+            ILGenerator setIL = setMethodBuilder.GetILGenerator();
             setIL.Emit(OpCodes.Ldarg_0);
             setIL.Emit(OpCodes.Ldarg_1);
             setIL.Emit(OpCodes.Stfld, fieldBuilder);
@@ -161,6 +150,20 @@ namespace MSBuildWasm
             propertyBuilder.SetGetMethod(getMethodBuilder);
             propertyBuilder.SetSetMethod(setMethodBuilder);
 
+            if (param.Output)
+            {
+                ConstructorInfo attributeConstructor = typeof(OutputAttribute).GetConstructor(Type.EmptyTypes);
+                CustomAttributeBuilder attributeBuilder = new(attributeConstructor, []);
+                propertyBuilder.SetCustomAttribute(attributeBuilder);
+            }
+
+            if (param.Required)
+            {
+                ConstructorInfo attributeConstructor = typeof(RequiredAttribute).GetConstructor(Type.EmptyTypes);
+                CustomAttributeBuilder attributeBuilder = new(attributeConstructor, []);
+                propertyBuilder.SetCustomAttribute(attributeBuilder);
+            }
+
         }
 
         /// <summary>
@@ -168,7 +171,7 @@ namespace MSBuildWasm
         /// </summary>
         /// <param name="json"></param>
         /// <returns></returns>
-        private TaskPropertyInfo[] ConvertJsonTaskInfoToProperties(string json)
+        private static TaskPropertyInfo[] ConvertJsonTaskInfoToProperties(string json)
         {
             var taskPropertyInfos = new List<TaskPropertyInfo>();
 
@@ -192,32 +195,33 @@ namespace MSBuildWasm
                 }
             }
 
-            return taskPropertyInfos.ToArray();
+            return [.. taskPropertyInfos];
         }
 
-        private Type ConvertStringToType(string type)
+        private static Type ConvertStringToType(string type) => type switch
         {
-            return type.ToLower() switch
-            {
-                "string" => typeof(string),
-                "bool" => typeof(bool),
-                // TODO: ITaskItem, lists of things
-                _ => throw new ArgumentException($"Unsupported type: {type}")
-            };
-        }
+            "string" => typeof(string),
+            "bool" => typeof(bool),
+            "ITaskItem" => typeof(ITaskItem),
+            "string[]" => typeof(string[]),
+            "bool[]" => typeof(bool[]),
+            "ITaskItem[]" => typeof(ITaskItem[]),
+            // TODO: ITaskItem, lists of things
+            _ => throw new ArgumentException($"Unsupported transfer type: {type}")
+        };
 
         private void LinkTaskInfo(Linker linker, Store store)
         {
             linker.Define("msbuild-taskinfo", "TaskInfo", Function.FromCallback(store, (Caller caller, int address, int length) =>
             {
-                var memory = caller.GetMemory("memory") ?? throw new Exception("WebAssembly module did not export a memory.");
-                var propertiesString = memory.ReadString(address, length);
+                Memory memory = caller.GetMemory("memory") ?? throw new Exception("WebAssembly module did not export a memory.");
+                string propertiesString = memory.ReadString(address, length);
                 _taskParameters = ConvertJsonTaskInfoToProperties(propertiesString);
             }));
 
         }
         // when running a module these functions have to be exported by the host but in the factory we run it only to get TaskProperties
-        private void LinkRequiredCallbacks(Linker linker, Store store)
+        private static void LinkRequiredCallbacks(Linker linker, Store store)
         {
             linker.Define("msbuild-log", "LogMessage", Function.FromCallback(store, (Caller caller, int importance, int address, int length) => { }));
             linker.Define("msbuild-log", "LogError", Function.FromCallback(store, (Caller caller, int address, int length) => { }));

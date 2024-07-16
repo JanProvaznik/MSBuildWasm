@@ -11,14 +11,29 @@
     <ProjectReference Include="../../src/MSBuildWasm.csproj" />
   </ItemGroup>
 
-  <UsingTask TaskName="MyNewFancyTask" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
+  <ItemGroup>
+    <I1 Include="file1.txt" />
+    <I2 Include="file2.txt" />
+  </ItemGroup>
+
+  <UsingTask TaskName="Template" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
     <Task>..\rust_template\target\wasm32-wasi\release\rust_template.wasm</Task>
+  </UsingTask>
+  <UsingTask TaskName="MyConcat" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
+    <Task>..\rust_files\target\wasm32-wasi\release\rust_files.wasm</Task>
   </UsingTask>
 
 
-  <Target Name="Fancytask" BeforeTargets="AfterBuild">
-    <MyNewFancyTask TestRequiredProperty="hello">
+  <Target Name="WasmTasks" BeforeTargets="AfterBuild">
+    <Template TestRequiredProperty="hello" TestITaskItemProperty="@(LogFile)">
       <Output TaskParameter="TestOutputProperty" PropertyName="OutputProperty"/>
-    </MyNewFancyTask>
+    </Template>
+
+    <MyConcat InputFile1="@(I1)" InputFile2="@(I2)">
+      <Output TaskParameter="OutputFile" PropertyName="Outfile"/>
+    </MyConcat>
+
+    <Message Text="Output file: $(Outfile)" />
+
   </Target>
 </Project>
