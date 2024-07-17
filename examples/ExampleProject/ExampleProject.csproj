@@ -25,7 +25,7 @@
 
 
   <Target Name="WasmTasks" BeforeTargets="AfterBuild">
-    <Template TestRequiredProperty="hello" TestITaskItemProperty="@(LogFile)">
+    <Template TestRequiredProperty="hello">
       <Output TaskParameter="TestOutputProperty" PropertyName="OutputProperty"/>
     </Template>
 
