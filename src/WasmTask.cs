@@ -8,18 +8,24 @@ using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Wasmtime;
 
+
 namespace MSBuildWasm
 {
     public abstract class WasmTask : Microsoft.Build.Utilities.Task, IWasmTask
     {
         const string ExecuteFunctionName = "Execute";
         public string WasmFilePath { get; set; }
-        public ITaskItem[] Directories { get; set; } = [new TaskItem(Directory.GetCurrentDirectory())];
+        public ITaskItem[] Directories { get; set; } = [];
         public bool InheritEnv { get; set; } = false;
         public string Environment { get; set; } = null;
 
-        private static readonly HashSet<string> s_blacklistedProperties = [nameof(WasmFilePath), nameof(InheritEnv), nameof(ExecuteFunctionName)];
-        private string _tempDir;
+        // Reflection in WasmTaskFactory will add properties to a subclass.
+
+        private static readonly HashSet<string> s_blacklistedProperties =
+            [nameof(WasmFilePath), nameof(InheritEnv), nameof(ExecuteFunctionName),
+            nameof(Directories), nameof(InheritEnv), nameof(Environment)];
+        private DirectoryInfo _sharedTmpDir;
+        private DirectoryInfo _hostTmpDir;
         private string _inputPath;
         private string _outputPath;
 
@@ -29,33 +35,35 @@ namespace MSBuildWasm
 
         public override bool Execute()
         {
-            CreateTempDir();
-            CopyTaskItemsToTemp();
+            CreateTmpDirs();
+            CopyAllTaskItemPropertiesToTmp();
             CreateTaskIO();
-            return ExecuteWasm();
+            ExecuteWasm();
+            return !Log.HasLoggedErrors;
         }
-        private bool ExecuteWasm()
+
+        private WasiConfiguration GetWasiConfig()
         {
-            using var engine = new Engine();
-            var wasiConfigBuilder = new WasiConfiguration();
+            var wasiConfig = new WasiConfiguration();
             // setup env
             if (InheritEnv)
             {
-                wasiConfigBuilder = wasiConfigBuilder.WithInheritedEnvironment();
+                wasiConfig = wasiConfig.WithInheritedEnvironment();
             }
-
-            // create a temporary directory for the task
-            wasiConfigBuilder = wasiConfigBuilder.WithStandardOutput(_outputPath).WithStandardInput(_inputPath);
-            wasiConfigBuilder = wasiConfigBuilder.WithPreopenedDirectory(_tempDir, ".");
+            wasiConfig = wasiConfig.WithStandardOutput(_outputPath).WithStandardInput(_inputPath);
+            wasiConfig = wasiConfig.WithPreopenedDirectory(_sharedTmpDir.FullName, ".");
             foreach (ITaskItem dir in Directories)
             {
-                wasiConfigBuilder = wasiConfigBuilder.WithPreopenedDirectory(dir.ItemSpec, dir.ItemSpec);
+                wasiConfig = wasiConfig.WithPreopenedDirectory(dir.ItemSpec, dir.ItemSpec);
             }
-            // todo propagate info about directories to the task
 
-            using var store = new Store(engine);
-            store.SetWasiConfiguration(wasiConfigBuilder);
+            return wasiConfig;
 
+        }
+
+        private Instance SetupWasmtimeInstance(Engine engine, Store store)
+        {
+            store.SetWasiConfiguration(GetWasiConfig());
 
             using var module = Wasmtime.Module.FromFile(engine, WasmFilePath);
             using var linker = new Linker(engine);
@@ -63,100 +71,140 @@ namespace MSBuildWasm
             LinkLogFunctions(linker, store);
             LinkTaskInfo(linker, store);
 
-            Instance instance = linker.Instantiate(store, module);
+            return linker.Instantiate(store, module);
+
+        }
+        private void ExecuteWasm()
+        {
+            using var engine = new Engine();
+            using var store = new Store(engine);
+            Instance instance = SetupWasmtimeInstance(engine, store);
+
             Func<int> execute = instance.GetFunction<int>(ExecuteFunctionName);
-            if (execute == null)
-            {
-                Log.LogError($"Function {ExecuteFunctionName} not found in WebAssembly module.");
-                return false;
-            }
 
             try
             {
+                if (execute == null)
+                {
+                    throw new WasmtimeException($"Function {ExecuteFunctionName} not found in WebAssembly module.");
+                }
+
                 int taskResult = execute.Invoke();
                 store.Dispose(); // store holds onto the output json file
                 // read output file
-                if (!ExtractOutputs())
+                ExtractOutputs();
+                if (taskResult != 0) // 0 success inside otherwise error
                 {
-                    return false;
+                    Log.LogError($"Task failed.");
                 }
-
-                return taskResult == 0; // 0 is success inside, anything else is failure
             }
             catch (WasmtimeException ex)
             {
                 Log.LogError($"Error executing WebAssembly module: {ex.Message}");
-                return false;
             }
             catch (IOException ex)
             {
                 Log.LogError($"Error reading output file: {ex.Message}");
-                return false;
 
             }
             finally { Cleanup(); }
-
 
         }
 
         private void CreateTaskIO()
         {
-            string taskInput = CreateTaskInputJSON();
-            _inputPath = Path.Combine(_tempDir, "input.json");
-            File.WriteAllText(_inputPath, taskInput);
+            _inputPath = Path.Combine(_hostTmpDir.FullName, "input.json");
+            _outputPath = Path.Combine(_hostTmpDir.FullName, "output.json");
+            File.WriteAllText(_inputPath, CreateTaskInputJSON());
             Log.LogMessage(MessageImportance.Low, $"Created input file: {_inputPath}");
 
-            _outputPath = Path.Combine(_tempDir, "output.json");
         }
-        private void CreateTempDir()
+        private void CreateTmpDirs()
         {
-            _tempDir = Path.Combine(Path.GetTempPath(), Path.GetRandomFileName());
-            Directory.CreateDirectory(_tempDir); // trycatch?
-            Log.LogMessage(MessageImportance.Low, $"Created temporary directory: {_tempDir}");
-
+            _sharedTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())); // trycatch?
+            _hostTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())); // trycatch?
+            Log.LogMessage(MessageImportance.Low, $"Created shared temporary directories: {_sharedTmpDir} and {_hostTmpDir}");
         }
 
+        /// <summary>
+        /// Remove temporary directories.
+        /// </summary>
         private void Cleanup()
         {
-            if (_tempDir != null)
-            {
-                Directory.Delete(_tempDir, true); // trycatch?
-                Log.LogMessage(MessageImportance.Low, $"Removed temporary directory: {_tempDir}");
-            }
-
+            DeleteTemporaryDirectory(_sharedTmpDir);
+            DeleteTemporaryDirectory(_hostTmpDir);
         }
-        private void CopyTaskItemsToTemp()
+
+        private void DeleteTemporaryDirectory(DirectoryInfo directory)
         {
-            // reflect what ITaskItems and arrays are here in the class and copy them to the temp directory with appropriate paths
-            // except directories
-            PropertyInfo[] properties = GetType().GetProperties();
-
-            foreach (PropertyInfo property in properties)
+            if (directory != null)
             {
-                // Check if the property type is ITaskItem
-                if (typeof(ITaskItem).IsAssignableFrom(property.PropertyType))
+                try
                 {
-                    // Get the value of the property (which should be an ITaskItem)
-                    if (property.GetValue(this) is ITaskItem taskItem && taskItem != null)
-                    {
-                        // Get the ItemSpec (the path)
-                        string sourcePath = taskItem.ItemSpec;
-                        // Create the destination path in the _tmpPath directory
-                        string destinationPath = Path.Combine(_tempDir, Path.GetFileName(sourcePath)); //sus
-
-                        // Ensure the directory exists
-                        Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
-
-                        // Copy the file to the new location
-                        File.Copy(sourcePath, destinationPath, overwrite: true);
-
-                        Log.LogMessage(MessageImportance.Low, $"Copied {sourcePath} to {destinationPath}");
-
-                    }
+                    Directory.Delete(directory.FullName, true);
+                    Log.LogMessage(MessageImportance.Low, $"Removed temporary directory: {directory}");
+                }
+                catch (Exception ex)
+                {
+                    Log.LogMessage(MessageImportance.High, $"Failed to remove temporary directory: {directory}. Exception: {ex.Message}");
                 }
             }
         }
 
+
+        private void CopyTaskItemToTmpDir(ITaskItem taskItem)
+        {
+            // Get the ItemSpec (the path)
+            string sourcePath = taskItem.ItemSpec;
+            // Create the destination path in the _tmpPath directory
+            string destinationPath = Path.Combine(_sharedTmpDir.FullName, Path.GetFileName(sourcePath)); //sus
+
+            // Ensure the directory exists
+            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
+
+            // Copy the file to the new location
+            File.Copy(sourcePath, destinationPath, overwrite: true);
+
+            Log.LogMessage(MessageImportance.Low, $"Copied {sourcePath} to {destinationPath}");
+        }
+
+        /// <summary>
+        /// Use reflection to figure out what ITaskItem and ITaskItem[] typed properties are here in the class.
+        /// Copy their content to the tmp directory for the sandbox to use.
+        /// TODO: check size to not copy large amounts of data
+        /// </summary>
+        /// <remarks>If wasmtime implemented per-file access this effort could be saved.</remarks>
+        /// TODO: save effort copying if a file's Directory is preopened
+        private void CopyAllTaskItemPropertiesToTmp()
+        {
+            PropertyInfo[] properties = GetType().GetProperties().Where(p =>
+                (typeof(ITaskItem).IsAssignableFrom(p.PropertyType) || typeof(ITaskItem[]).IsAssignableFrom(p.PropertyType))
+                // filter out properties that are not ITaskItem or ITaskItem[] or are in the blacklist use LINQ
+                && !s_blacklistedProperties.Contains(p.Name)
+            ).ToArray();
+
+            foreach (PropertyInfo property in properties)
+            {
+                CopyPropertyToTmp(property);
+            }
+        }
+
+        private void CopyPropertyToTmp(PropertyInfo property)
+        {
+            object value = property.GetValue(this);
+
+            if (value is ITaskItem taskItem && taskItem != null)
+            {
+                CopyTaskItemToTmpDir(taskItem);
+            }
+            else if (value is ITaskItem[] taskItems && taskItems != null)
+            {
+                foreach (ITaskItem taskItem_ in taskItems)
+                {
+                    CopyTaskItemToTmpDir(taskItem_);
+                }
+            }
+        }
         private static Dictionary<string, string> SerializeITaskItem(ITaskItem item)
         {
             var taskItemDict = new Dictionary<string, string>
@@ -204,12 +252,21 @@ namespace MSBuildWasm
 
             return JsonSerializer.Serialize(propertiesToSerialize);
         }
+        // this is also not so simple D: 
+        private string SerializeDirectories()
+        {
+            // TODO: probably wrong
+            return JsonSerializer.Serialize(Directories.Select(d => d.ItemSpec).ToArray());
+        }
         private string CreateTaskInputJSON()
         {
             var sb = new StringBuilder();
             sb.Append("{\"Properties\":");
             sb.Append(SerializeProperties());
+            sb.Append(",\"Directories\":");
+            sb.Append(SerializeDirectories());
             sb.Append('}');
+
             return sb.ToString();
 
         }
@@ -226,7 +283,7 @@ namespace MSBuildWasm
             {
                 string taskOutput = File.ReadAllText(_outputPath);
                 // TODO: figure out where to copy the output files
-                ReflectJson(taskOutput);
+                ReflectOutputJsonToClassProperties(taskOutput);
                 return true;
             }
             else
@@ -282,6 +339,49 @@ namespace MSBuildWasm
             Log.LogMessage(MessageImportance.Low, "Linked logger functions to WebAssembly module.");
         }
 
+        private void ReflectJsonPropertyToClassProperty(PropertyInfo[] classProperties, JsonProperty jsonProperty)
+        {
+            // Find the matching property in the class
+            PropertyInfo classProperty = Array.Find(classProperties, p => p.Name.Equals(jsonProperty.Name, StringComparison.OrdinalIgnoreCase));
+
+            if (classProperty == null || !classProperty.CanWrite)
+            {
+                Log.LogMessage(MessageImportance.Normal, $"Property outupted by WasmTask {jsonProperty.Name} not found or is read-only.");
+                return;
+            }
+            // Parse and set the property value based on its type
+            // note: can't use switch because Type is not a constant
+            if (classProperty.PropertyType == typeof(string))
+            {
+                classProperty.SetValue(this, jsonProperty.Value.GetString());
+            }
+            else if (classProperty.PropertyType == typeof(bool))
+            {
+                classProperty.SetValue(this, jsonProperty.Value.GetBoolean());
+            }
+            else if (classProperty.PropertyType == typeof(ITaskItem))
+            {
+                classProperty.SetValue(this, ExtractTaskItem(jsonProperty.Value));
+            }
+            else if (classProperty.PropertyType == typeof(ITaskItem[]))
+            {
+                classProperty.SetValue(this, ExtractTaskItems(jsonProperty.Value));
+            }
+            else if (classProperty.PropertyType == typeof(string[]))
+            {
+                classProperty.SetValue(this, jsonProperty.Value.EnumerateArray().Select(j => j.GetString()).ToArray());
+            }
+            else if (classProperty.PropertyType == typeof(bool[]))
+            {
+                classProperty.SetValue(this, jsonProperty.Value.EnumerateArray().Select(j => j.GetBoolean()).ToArray());
+            }
+            else
+            {
+                throw new ArgumentException($"Unsupported property type: {classProperty.PropertyType}"); // this should never happen, only programming error in this class or factory could cause it.
+            }
+
+        }
+
         /// <summary>
         /// Task Output JSON is in the form of a dictionary of output properties P.
         /// Read all keys of the JSON, values can be strings, dict<string,string> (representing ITaskItem), or bool, and lists of these things.
@@ -289,58 +389,21 @@ namespace MSBuildWasm
         /// for each property in P
         /// set R to value(P) if P==R
         /// </summary>
-        /// <param name="taskOutput">Task Output Json</param>
-        private void ReflectJson(string taskOutput)
+        /// <param name="taskOutputJson">Task Output JSON</param>
+        private void ReflectOutputJsonToClassProperties(string taskOutputJson)
         {
             try
             {
-                // Parse the JSON string
-                using JsonDocument document = JsonDocument.Parse(taskOutput);
+                using JsonDocument document = JsonDocument.Parse(taskOutputJson);
                 JsonElement root = document.RootElement;
 
                 // Get all properties of the current class
-                PropertyInfo[] properties = GetType().GetProperties();
+                PropertyInfo[] classProperties = GetType().GetProperties();
 
                 // Iterate through all properties in the JSON
                 foreach (JsonProperty jsonProperty in root.EnumerateObject())
                 {
-                    // Find the matching property in the class
-                    PropertyInfo classProperty = Array.Find(properties, p => p.Name.Equals(jsonProperty.Name, StringComparison.OrdinalIgnoreCase));
-
-                    if (classProperty != null && classProperty.CanWrite)
-                    {
-                        // Set the property value based on its type
-                        switch (jsonProperty.Value.ValueKind)
-                        {
-                            case JsonValueKind.String:
-                                classProperty.SetValue(this, jsonProperty.Value.GetString());
-                                break;
-                            case JsonValueKind.Number:
-                                throw new Exception("Numbers are not allowed as outputs of MSBuild tasks"); // todo exception type
-                            case JsonValueKind.True:
-                            case JsonValueKind.False:
-                                classProperty.SetValue(this, jsonProperty.Value.GetBoolean());
-                                break;
-                            //case JsonValueKind.Array:
-                            //    // Handle array types 
-                            //    break;
-                            case JsonValueKind.Object: // ITaskItem
-                                // Copy from tmp to final location
-                                string itemSpec = jsonProperty.Value.GetProperty("ItemSpec").GetString();
-                                // TODO: copy metadata if they exist
-                                File.Copy(Path.Combine(_tempDir, itemSpec), itemSpec, overwrite: true);
-                                ITaskItem taskItem = new TaskItem(itemSpec);
-                                classProperty.SetValue(this, taskItem);
-                                break;
-                            //case JsonValueKind.Array:
-                            // TODO: Handle array types
-
-
-                            // todo: ITaskItem and lists
-                            default:
-                                throw new Exception("Unexpected task output type."); // todo exception type
-                        }
-                    }
+                    ReflectJsonPropertyToClassProperty(classProperties, jsonProperty);
                 }
             }
             catch (JsonException ex)
@@ -349,8 +412,26 @@ namespace MSBuildWasm
             }
             catch (Exception ex)
             {
-                Log.LogError($"Error in ReflectJson: {ex.Message}");
+                Log.LogError($"Error Reflecting properties from Json to Class: {ex.Message}");
             }
+        }
+
+        private ITaskItem ExtractTaskItem(JsonElement jsonElement)
+        {
+            string itemSpec = jsonElement.GetProperty("ItemSpec").GetString();
+            // TODO: Actually extract
+            string itemPath = Path.Combine(_sharedTmpDir.FullName, itemSpec);
+            if (!File.Exists(itemPath))
+            {
+                Log.LogError($"Task output file {itemPath} not found.");// TODO is this ok?
+            }
+
+
+            return new TaskItem(itemSpec);
+        }
+        private ITaskItem[] ExtractTaskItems(JsonElement jsonElement)
+        {
+            return jsonElement.EnumerateArray().Select(ExtractTaskItem).ToArray();
         }
 
         /// <summary>

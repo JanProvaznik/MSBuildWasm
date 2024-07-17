@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-#[repr(C)]
+#[repr(C)] #[allow(dead_code)]
 enum MessageImportance {
     High,
     Normal,
@@ -15,10 +15,10 @@ pub enum TaskResult {
 }
 
 // Import logging as functions from the host environment
-#[link(wasm_import_module = "msbuild-log")]
+#[link(wasm_import_module = "msbuild-log")] #[allow(dead_code)]
 extern "C" {
     fn LogError(ptr: *const c_char, len: usize);
-    fn LogWarning(ptr: *const c_char, len: usize);  
+    fn LogWarning(ptr: *const c_char, len: usize);
     fn LogMessage(messageImportance: MessageImportance, ptr: *const c_char, len: usize);
 }
 
@@ -29,7 +29,7 @@ extern "C" {
 
 
 
-#[no_mangle]
+#[no_mangle] #[allow(non_snake_case)]
 pub fn Execute() -> TaskResult
 {
         // Task input properties in stdin
@@ -37,6 +37,7 @@ pub fn Execute() -> TaskResult
         std::io::stdin().read_line(&mut input).unwrap();
 
         // let errorMessage = CString::new("Error message from Wasm").unwrap(); // we don't want the template task failing
+        // show what the template task got on input
         let warning_message= CString::new(input).unwrap();
         let message1= CString::new("High priority message from Wasm").unwrap();
         let message2 = CString::new("Normal priority message from Wasm").unwrap();
@@ -56,10 +57,10 @@ pub fn Execute() -> TaskResult
         return TaskResult::Success;
 }
 
-#[no_mangle]
+#[no_mangle] #[allow(non_snake_case)]
 pub fn GetTaskInfo() 
 {
-    let c_string = CString::new(r#"{"Properties":{"TestNormalProperty":{"type":"string","required":false,"output":false},"TestOutputProperty":{"type":"string","required":false,"output":true},"TestRequiredProperty":{"type":"string","required":true,"output":false},"TestBoolProperty":{"type":"bool","required":false,"output":false},"TestITaskItemProperty":{"type":"ITaskItem","required":false,"output":false}}}"#).unwrap();
+    let c_string = CString::new(r#"{"Properties":{"TestNormalProperty":{"type":"string","required":false,"output":false},"TestOutputProperty":{"type":"string","required":false,"output":true},"TestRequiredProperty":{"type":"string","required":true,"output":false},"TestBoolProperty":{"type":"bool","required":false,"output":false}}}"#).unwrap();
     unsafe 
     {
     TaskInfo(c_string.as_ptr(), c_string.to_bytes().len());

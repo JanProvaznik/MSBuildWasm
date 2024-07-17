@@ -20,7 +20,6 @@ namespace MSBuildWasm
         private TaskLoggingHelper _log;
         private string _taskName;
         private string _taskPath;
-        private IDictionary<string, string> _executionProperties;
 
         public WasmTaskFactory()
         {
@@ -51,9 +50,6 @@ namespace MSBuildWasm
             };
             _taskName = taskName;
             _taskPath = Path.GetFullPath(taskBody);
-
-            // TODO: semantics for this
-            _executionProperties = factoryIdentityParameters;
 
             GetWasmTaskProperties();
 
@@ -100,7 +96,7 @@ namespace MSBuildWasm
                 using var linker = new Linker(engine);
                 using var store = new Store(engine);
                 linker.DefineWasi();
-                LinkRequiredCallbacks(linker, store);
+                LinkEmptyLogCallbacks(linker, store);
                 LinkTaskInfo(linker, store);
                 Instance instance = linker.Instantiate(store, module);
                 Action getTaskInfo = instance.GetAction("GetTaskInfo");
@@ -118,12 +114,9 @@ namespace MSBuildWasm
             }
         }
 
-        private static void DefineProperty(TypeBuilder typeBuilder, TaskPropertyInfo param)
+
+        private static void DefineGetter(TypeBuilder typeBuilder, TaskPropertyInfo param, FieldBuilder fieldBuilder, PropertyBuilder propertyBuilder)
         {
-            FieldBuilder fieldBuilder = typeBuilder.DefineField($"_{param.Name}", param.PropertyType, FieldAttributes.Private);
-
-            PropertyBuilder propertyBuilder = typeBuilder.DefineProperty(param.Name, PropertyAttributes.HasDefault, param.PropertyType, null);
-
             MethodBuilder getMethodBuilder = typeBuilder.DefineMethod(
                 $"get_{param.Name}",
                 MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
@@ -135,6 +128,11 @@ namespace MSBuildWasm
             getIL.Emit(OpCodes.Ldfld, fieldBuilder);
             getIL.Emit(OpCodes.Ret);
 
+            propertyBuilder.SetGetMethod(getMethodBuilder);
+        }
+
+        private static void DefineSetter(TypeBuilder typeBuilder, TaskPropertyInfo param, FieldBuilder fieldBuilder, PropertyBuilder propertyBuilder)
+        {
             MethodBuilder setMethodBuilder = typeBuilder.DefineMethod(
                 $"set_{param.Name}",
                 MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
@@ -147,52 +145,68 @@ namespace MSBuildWasm
             setIL.Emit(OpCodes.Stfld, fieldBuilder);
             setIL.Emit(OpCodes.Ret);
 
-            propertyBuilder.SetGetMethod(getMethodBuilder);
             propertyBuilder.SetSetMethod(setMethodBuilder);
+        }
 
-            if (param.Output)
+        private static void DefineAttributes(TaskPropertyInfo prop, PropertyBuilder propertyBuilder)
+        {
+            if (prop.Output)
             {
-                ConstructorInfo attributeConstructor = typeof(OutputAttribute).GetConstructor(Type.EmptyTypes);
-                CustomAttributeBuilder attributeBuilder = new(attributeConstructor, []);
-                propertyBuilder.SetCustomAttribute(attributeBuilder);
+                propertyBuilder.SetCustomAttribute(new CustomAttributeBuilder(typeof(OutputAttribute).GetConstructor(Type.EmptyTypes), []));
             }
 
-            if (param.Required)
+            if (prop.Required)
             {
-                ConstructorInfo attributeConstructor = typeof(RequiredAttribute).GetConstructor(Type.EmptyTypes);
-                CustomAttributeBuilder attributeBuilder = new(attributeConstructor, []);
-                propertyBuilder.SetCustomAttribute(attributeBuilder);
+                propertyBuilder.SetCustomAttribute(new CustomAttributeBuilder(typeof(RequiredAttribute).GetConstructor(Type.EmptyTypes), []));
             }
 
         }
 
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <param name="json"></param>
-        /// <returns></returns>
-        private static TaskPropertyInfo[] ConvertJsonTaskInfoToProperties(string json)
+        private static void DefineProperty(TypeBuilder typeBuilder, TaskPropertyInfo prop)
         {
-            var taskPropertyInfos = new List<TaskPropertyInfo>();
+            FieldBuilder fieldBuilder = typeBuilder.DefineField($"_{prop.Name}", prop.PropertyType, FieldAttributes.Private);
+            PropertyBuilder propertyBuilder = typeBuilder.DefineProperty(prop.Name, PropertyAttributes.HasDefault, prop.PropertyType, null);
 
-            using JsonDocument document = JsonDocument.Parse(json);
-            JsonElement root = document.RootElement;
+            DefineGetter(typeBuilder, prop, fieldBuilder, propertyBuilder);
+            DefineSetter(typeBuilder, prop, fieldBuilder, propertyBuilder);
+            DefineAttributes(prop, propertyBuilder);
+        }
 
-            if (root.TryGetProperty("Properties", out JsonElement properties))
+
+        private static TaskPropertyInfo ExtractProperty(JsonProperty jsonProperty)
+        {
+            string name = jsonProperty.Name;
+            JsonElement value = jsonProperty.Value;
+
+            string type = value.GetProperty("type").GetString();
+            bool required = value.GetProperty("required").GetBoolean();
+            bool output = value.GetProperty("output").GetBoolean();
+
+            Type propertyType = ConvertStringToType(type);
+            return new TaskPropertyInfo(name, propertyType, output, required);
+        }
+
+        /// <param name="json">Task Info JSON</param>
+        /// <returns>List of the property infos to create in the task type.</returns>
+        private TaskPropertyInfo[] ConvertJsonTaskInfoToProperties(string json)
+        {
+            List<TaskPropertyInfo> taskPropertyInfos = [];
+            try
             {
-                foreach (JsonProperty property in properties.EnumerateObject())
+                using JsonDocument document = JsonDocument.Parse(json);
+                JsonElement root = document.RootElement;
+
+                if (root.TryGetProperty("Properties", out JsonElement properties))
                 {
-                    string name = property.Name;
-                    JsonElement value = property.Value;
-
-                    string type = value.GetProperty("type").GetString();
-                    bool required = value.GetProperty("required").GetBoolean();
-                    bool output = value.GetProperty("output").GetBoolean();
-
-                    Type propertyType = ConvertStringToType(type);
-
-                    taskPropertyInfos.Add(new TaskPropertyInfo(name, propertyType, output, required));
+                    foreach (JsonProperty jsonProperty in properties.EnumerateObject())
+                    {
+                        taskPropertyInfos.Add(ExtractProperty(jsonProperty));
+                    }
                 }
+            }
+            catch (Exception ex) when (ex is JsonException || ex is KeyNotFoundException)
+            {
+                _log.LogErrorFromException(ex);
             }
 
             return [.. taskPropertyInfos];
@@ -221,7 +235,7 @@ namespace MSBuildWasm
 
         }
         // when running a module these functions have to be exported by the host but in the factory we run it only to get TaskProperties
-        private static void LinkRequiredCallbacks(Linker linker, Store store)
+        private static void LinkEmptyLogCallbacks(Linker linker, Store store)
         {
             linker.Define("msbuild-log", "LogMessage", Function.FromCallback(store, (Caller caller, int importance, int address, int length) => { }));
             linker.Define("msbuild-log", "LogError", Function.FromCallback(store, (Caller caller, int address, int length) => { }));

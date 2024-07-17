@@ -1,7 +1,7 @@
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-#[repr(C)]
+#[repr(C)] #[allow(dead_code)]
 enum MessageImportance {
     High,
     Normal,
@@ -15,7 +15,7 @@ pub enum TaskResult {
 }
 
 // Import logging as functions from the host environment
-#[link(wasm_import_module = "msbuild-log")]
+#[link(wasm_import_module = "msbuild-log")] #[allow(dead_code)]
 extern "C" {
     fn LogError(ptr: *const c_char, len: usize);
     fn LogWarning(ptr: *const c_char, len: usize);  
@@ -29,16 +29,40 @@ extern "C" {
 
 
 
-#[no_mangle]
+#[no_mangle] #[allow(non_snake_case)]
 pub fn Execute() -> TaskResult
 {
         // Task input properties in stdin
         // the input will be in the form {"Properties:{InputFile1:{Path:"..."},InputFile2:{Path:"..."},OutputFile:{Path:"..."}}}
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).unwrap();
+
+        // Reading and logging directory contents
+        match std::fs::read_dir(".") {
+            Ok(entries) => {
+                for entry in entries {
+                    if let Ok(entry) = entry {
+                        let file_name = entry.file_name();
+                        if let Ok(c_string) = CString::new(file_name.to_string_lossy().as_bytes()) {
+                            unsafe{LogWarning( c_string.as_ptr(), c_string.to_bytes().len());}
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                let error_message = CString::new(format!("Failed to read directory: {}", e)).unwrap();
+                unsafe{LogError(error_message.as_ptr(), error_message.to_bytes().len());}
+            }
+        }
         
         // this is not nice rust code, it lacks error handling
         let input_json: serde_json::Value = serde_json::from_str(&input).unwrap();
+
+        let warning_message= CString::new(input).unwrap();
+        unsafe
+        {
+            LogWarning(warning_message.as_ptr(), warning_message.to_bytes().len());
+        }
 
         // we will parse out the paths from the input string
         let input_file1 = input_json["Properties"]["InputFile1"]["ItemSpec"].as_str().unwrap();
@@ -61,7 +85,7 @@ pub fn Execute() -> TaskResult
         return TaskResult::Success;
 }
 
-#[no_mangle]
+#[no_mangle] #[allow(non_snake_case)]
 pub fn GetTaskInfo() 
 {
     let c_string = CString::new(r#"{"Properties":{"InputFile1":{"type":"ITaskItem","required":true,"output":false},"InputFile2":{"type":"ITaskItem","required":true,"output":false},"OutputFile":{"type":"ITaskItem","required":false,"output":true}}}"#).unwrap();
