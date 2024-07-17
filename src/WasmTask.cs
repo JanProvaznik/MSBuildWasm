@@ -21,7 +21,7 @@ namespace MSBuildWasm
 
         // Reflection in WasmTaskFactory will add properties to a subclass.
 
-        private static readonly HashSet<string> s_blacklistedProperties =
+        private static readonly HashSet<string> s_nonInputPropertyNames =
             [nameof(WasmFilePath), nameof(InheritEnv), nameof(ExecuteFunctionName),
             nameof(Directories), nameof(InheritEnv), nameof(Environment)];
         private DirectoryInfo _sharedTmpDir;
@@ -180,7 +180,7 @@ namespace MSBuildWasm
             PropertyInfo[] properties = GetType().GetProperties().Where(p =>
                 (typeof(ITaskItem).IsAssignableFrom(p.PropertyType) || typeof(ITaskItem[]).IsAssignableFrom(p.PropertyType))
                 // filter out properties that are not ITaskItem or ITaskItem[] or are in the blacklist use LINQ
-                && !s_blacklistedProperties.Contains(p.Name)
+                && !s_nonInputPropertyNames.Contains(p.Name)
             ).ToArray();
 
             foreach (PropertyInfo property in properties)
@@ -235,7 +235,7 @@ namespace MSBuildWasm
         {
             var propertiesToSerialize = GetType()
                                         .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                                        .Where(p => !s_blacklistedProperties.Contains(p.Name) && IsSupportedType(p.PropertyType))
+                                        .Where(p => !s_nonInputPropertyNames.Contains(p.Name) && IsSupportedType(p.PropertyType))
                                         .ToDictionary(p => p.Name, p =>
                                         {
                                             object value = p.GetValue(this);
@@ -419,12 +419,13 @@ namespace MSBuildWasm
         private ITaskItem ExtractTaskItem(JsonElement jsonElement)
         {
             string itemSpec = jsonElement.GetProperty("ItemSpec").GetString();
-            // TODO: Actually extract
             string itemPath = Path.Combine(_sharedTmpDir.FullName, itemSpec);
             if (!File.Exists(itemPath))
             {
                 Log.LogError($"Task output file {itemPath} not found.");// TODO is this ok?
             }
+            File.Copy(itemPath, itemSpec, overwrite: true);
+
 
 
             return new TaskItem(itemSpec);
