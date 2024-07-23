@@ -43,33 +43,42 @@ namespace WasmTasksTests
             
             task.Execute().ShouldBeTrue();
         }
-        [Fact]
-        public void ExecuteConcat()
-        {
-            const string i1 = "i1.txt";
-            const string i2 = "i2.txt";
-            const string o = "wasmconcatoutput.txt";
 
+        [Theory]
+        [InlineData("i1.txt", "i2.txt")]
+        [InlineData(@"folder\i1.txt", @"folder\i2.txt")]
+        [InlineData(@"..\i1.txt", @"..\i2.txt")]
+        [InlineData(@"deep\folder\structure\i1.txt", @"deep\folder\structure\i2.txt")]
+        public void ExecuteConcatDifferentPaths(string inputPath1, string inputPath2)
+        {
             const string s1 = "foo";
             const string s2 = "bar";
             const string conc = s1 + s2;
+            const string outputPath = "wasmconcatoutput.txt";
 
-            // write foo to i1
-            System.IO.File.WriteAllText(i1, s1);
-            // write bar to i2
-            System.IO.File.WriteAllText(i2, s2);
+            // Ensure directory structure exists
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(Environment.CurrentDirectory, inputPath1)) ?? ".");
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(Environment.CurrentDirectory, inputPath2)) ?? ".");
 
 
+            File.WriteAllText(inputPath1, s1);
+            File.WriteAllText(inputPath2, s2);
 
-            var task = new ConcatWasmTask() {
-                InputFile1 = new TaskItem(i1),
-                InputFile2 = new TaskItem(i2),
-                //OutputFile = null
+            var task = new ConcatWasmTask()
+            {
+                InputFile1 = new TaskItem(inputPath1),
+                InputFile2 = new TaskItem(inputPath2),
             };
 
             task.Execute().ShouldBeTrue();
-            System.IO.File.ReadAllText(o).ShouldBe(conc);
+            File.ReadAllText(outputPath).ShouldBe(conc);
 
+            File.Delete(inputPath1);
+            File.Delete(inputPath2);
+            File.Delete(outputPath);
+        }
+
+    }
         }
 
     }

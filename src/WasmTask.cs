@@ -45,7 +45,6 @@ namespace MSBuildWasm
         private WasiConfiguration GetWasiConfig()
         {
             var wasiConfig = new WasiConfiguration();
-            // setup env
             if (InheritEnv)
             {
                 wasiConfig = wasiConfig.WithInheritedEnvironment();
@@ -91,9 +90,8 @@ namespace MSBuildWasm
 
                 int taskResult = execute.Invoke();
                 store.Dispose(); // store holds onto the output json file
-                // read output file
                 ExtractOutputs();
-                if (taskResult != 0) // 0 success inside otherwise error
+                if (taskResult != 0)
                 {
                     Log.LogError($"Task failed.");
                 }
@@ -121,8 +119,8 @@ namespace MSBuildWasm
         }
         private void CreateTmpDirs()
         {
-            _sharedTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())); // trycatch?
-            _hostTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName())); // trycatch?
+            _sharedTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
+            _hostTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
             Log.LogMessage(MessageImportance.Low, $"Created shared temporary directories: {_sharedTmpDir} and {_hostTmpDir}");
         }
 
@@ -154,10 +152,12 @@ namespace MSBuildWasm
 
         private void CopyTaskItemToTmpDir(ITaskItem taskItem)
         {
-            // Get the ItemSpec (the path)
+            // ItemSpec = path in usual circumstances
             string sourcePath = taskItem.ItemSpec;
-            // Create the destination path in the _tmpPath directory
-            string destinationPath = Path.Combine(_sharedTmpDir.FullName, Path.GetFileName(sourcePath)); //sus
+            string sandboxPath = ConvertToSandboxPath(sourcePath);
+            string destinationPath = Path.Combine(_sharedTmpDir.FullName, sandboxPath);
+            // add metadatum for sandboxPath
+            taskItem.SetMetadata("WasmPath", sandboxPath);
 
             // Ensure the directory exists
             Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
@@ -166,6 +166,13 @@ namespace MSBuildWasm
             File.Copy(sourcePath, destinationPath, overwrite: true);
 
             Log.LogMessage(MessageImportance.Low, $"Copied {sourcePath} to {destinationPath}");
+        }
+
+        private string ConvertToSandboxPath(string path)
+        {
+            return path.Replace(Path.DirectorySeparatorChar, '_')
+                       .Replace(Path.AltDirectorySeparatorChar, '_')
+                       .Replace(':', '_');
         }
 
         /// <summary>
@@ -177,11 +184,11 @@ namespace MSBuildWasm
         /// TODO: save effort copying if a file's Directory is preopened
         private void CopyAllTaskItemPropertiesToTmp()
         {
-            PropertyInfo[] properties = GetType().GetProperties().Where(p =>
-                (typeof(ITaskItem).IsAssignableFrom(p.PropertyType) || typeof(ITaskItem[]).IsAssignableFrom(p.PropertyType))
-                // filter out properties that are not ITaskItem or ITaskItem[] or are in the blacklist use LINQ
-                && !s_nonInputPropertyNames.Contains(p.Name)
-            ).ToArray();
+            IEnumerable<PropertyInfo> properties = GetType().GetProperties().Where(p =>
+                 (typeof(ITaskItem).IsAssignableFrom(p.PropertyType) || typeof(ITaskItem[]).IsAssignableFrom(p.PropertyType))
+                 // filter out properties that are not ITaskItem or ITaskItem[] or are in the blacklist use LINQ
+                 && !s_nonInputPropertyNames.Contains(p.Name)
+             );
 
             foreach (PropertyInfo property in properties)
             {
@@ -349,8 +356,15 @@ namespace MSBuildWasm
                 Log.LogMessage(MessageImportance.Normal, $"Property outupted by WasmTask {jsonProperty.Name} not found or is read-only.");
                 return;
             }
+            // if property is not output don't copy
+            if (classProperty.GetCustomAttribute<OutputAttribute>() == null)
+            {
+                Log.LogMessage(MessageImportance.Normal, $"Property outupted by WasmTask {jsonProperty.Name} does not have the Output attribute, ignoring.");
+                return;
+            }
+
             // Parse and set the property value based on its type
-            // note: can't use switch because Type is not a constant
+            // note: can't use a switch because Type is not a constant
             if (classProperty.PropertyType == typeof(string))
             {
                 classProperty.SetValue(this, jsonProperty.Value.GetString());
@@ -418,16 +432,24 @@ namespace MSBuildWasm
 
         private ITaskItem ExtractTaskItem(JsonElement jsonElement)
         {
+            string sandboxOuterPath = Path.Combine(_sharedTmpDir.FullName, jsonElement.GetProperty("WasmPath").GetString());
             string itemSpec = jsonElement.GetProperty("ItemSpec").GetString();
-            string itemPath = Path.Combine(_sharedTmpDir.FullName, itemSpec);
-            if (!File.Exists(itemPath))
+
+            if (File.Exists(sandboxOuterPath))
             {
-                Log.LogError($"Task output file {itemPath} not found.");// TODO is this ok?
+                File.Copy(sandboxOuterPath, itemSpec, overwrite: true);
             }
-            File.Copy(itemPath, itemSpec, overwrite: true);
+            else if (Directory.Exists(sandboxOuterPath))
+            {
+                //... TODO recurse
 
-
-
+            }
+            else
+            {
+                // nothing to copy
+                Log.LogMessage(MessageImportance.Normal, $"Task output not found");
+                return null;
+            }
             return new TaskItem(itemSpec);
         }
         private ITaskItem[] ExtractTaskItems(JsonElement jsonElement)

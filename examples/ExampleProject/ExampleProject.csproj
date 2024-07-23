@@ -12,8 +12,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <I1 Include="file1.txt" />
-    <I2 Include="file2.txt" />
+    <I1 Include="resources\..\resources\file1.txt" />
+    <I2 Include="resources\file2.txt" />
   </ItemGroup>
 
   <UsingTask TaskName="Template" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
@@ -33,7 +33,7 @@
       <Output TaskParameter="OutputFile" PropertyName="Outfile"/>
     </MyConcat>
 
-    <Message Text="Output file: $(Outfile)" />
+    <Warning Text="Output file: $(Outfile)" />
 
   </Target>
 </Project>
