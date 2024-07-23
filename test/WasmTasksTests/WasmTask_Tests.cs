@@ -79,7 +79,4 @@ namespace WasmTasksTests
         }
 
     }
-        }
-
-    }
 }
