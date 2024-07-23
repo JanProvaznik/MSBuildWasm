@@ -46,9 +46,9 @@ namespace WasmTasksTests
 
         [Theory]
         [InlineData("i1.txt", "i2.txt")]
-        [InlineData(@"folder\i1.txt", @"folder\i2.txt")]
-        [InlineData(@"..\i1.txt", @"..\i2.txt")]
-        [InlineData(@"deep\folder\structure\i1.txt", @"deep\folder\structure\i2.txt")]
+        [InlineData(@"folder/i1.txt", @"folder/i2.txt")]
+        [InlineData(@"../i1.txt", @"../i2.txt")]
+        [InlineData(@"deep/folder/structure/i1.txt", @"deep/folder/structure/i2.txt")]
         public void ExecuteConcatDifferentPaths(string inputPath1, string inputPath2)
         {
             const string s1 = "foo";
