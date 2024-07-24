@@ -36,6 +36,20 @@ namespace WasmTasksTests
                 BuildEngine = new MockEngine();
             }
         }
+
+        public class DirectoryMergeWasmTask : WasmTask
+        {
+            public ITaskItem[] Dirs { get; set; }
+            public string MergedName { get; set; }
+            [Output]
+            public ITaskItem MergedDir { get; set; }
+            public DirectoryMergeWasmTask() : base()
+            {
+                // set some default values
+                WasmFilePath = "../../../../../examples/rust_directory/target/wasm32-wasi/release/rust_directory.wasm";
+                BuildEngine = new MockEngine();
+            }
+        }
         [Fact]
         public void ExecuteTemplate_ShouldSucceed()
         {
@@ -77,6 +91,51 @@ namespace WasmTasksTests
             File.Delete(inputPath2);
             File.Delete(outputPath);
         }
+
+        // directory merge task
+        [Theory]
+        [InlineData("dir1", "dir2")]
+        [InlineData(@"folder/dir1", @"folder/dir2")]
+        [InlineData(@"../dir1", @"../dir2")]
+        [InlineData(@"deep/folder/structure/dir1", @"deep/folder/structure/dir2")]
+        public void ExecuteDirectoryMergeDifferentPaths(string inputPath1, string inputPath2)
+        {
+            // let's have a task that takes TaskItem[] and a string inputs and outputs a one ITaskItem which is the directory
+
+            // create the directories
+            Directory.CreateDirectory(inputPath1);
+            // fill the directory with 2 files
+            File.WriteAllText(Path.Combine(inputPath1, "file1.txt"), "file1");
+            File.WriteAllText(Path.Combine(inputPath1, "file2.txt"), "file2");
+            Directory.CreateDirectory(inputPath2);
+            // fill the directory with 3 files
+            File.WriteAllText(Path.Combine(inputPath2, "file3.txt"), "file3");
+            File.WriteAllText(Path.Combine(inputPath2, "file4.txt"), "file4");
+            File.WriteAllText(Path.Combine(inputPath2, "file5.txt"), "file5");
+
+            var task = new DirectoryMergeWasmTask()
+            {
+                Dirs = new ITaskItem[] { new TaskItem(inputPath1), new TaskItem(inputPath2) },
+                MergedName = "output_dir"
+            };
+
+            task.Execute().ShouldBeTrue();
+
+            string outputDir = task.MergedDir.ItemSpec;
+            Directory.Exists(outputDir).ShouldBeTrue();
+            Directory.GetFiles(outputDir).Length.ShouldBe(5);
+
+
+
+
+            // cleanup
+            Directory.Delete(inputPath1,true);
+            Directory.Delete(inputPath2, true);
+            Directory.Delete(outputDir, true);
+
+
+        }
+
 
     }
 }

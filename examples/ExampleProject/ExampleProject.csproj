@@ -14,6 +14,7 @@
   <ItemGroup>
     <I1 Include="resources\..\resources\file1.txt" />
     <I2 Include="resources\file2.txt" />
+    <I3 Include="resources\;resources\"/>
   </ItemGroup>
 
   <UsingTask TaskName="Template" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
@@ -21,6 +22,10 @@
   </UsingTask>
   <UsingTask TaskName="MyConcat" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
     <Task>..\rust_files\target\wasm32-wasi\release\rust_files.wasm</Task>
+  </UsingTask>
+
+  <UsingTask TaskName="MyMerge" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
+    <Task>..\rust_directory\target\wasm32-wasi\release\rust_directory.wasm</Task>
   </UsingTask>
 
 
@@ -32,6 +37,10 @@
     <MyConcat InputFile1="@(I1)" InputFile2="@(I2)">
       <Output TaskParameter="OutputFile" PropertyName="Outfile"/>
     </MyConcat>
+
+    <MyMerge Dirs="@(I3)">
+      <Output TaskParameter="MergedDir" PropertyName="M"/>
+      </MyMerge>
 
     <Warning Text="Output file: $(Outfile)" />
 

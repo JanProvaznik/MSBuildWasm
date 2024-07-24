@@ -158,14 +158,46 @@ namespace MSBuildWasm
             string destinationPath = Path.Combine(_sharedTmpDir.FullName, sandboxPath);
             // add metadatum for sandboxPath
             taskItem.SetMetadata("WasmPath", sandboxPath);
-
-            // Ensure the directory exists
             Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
-
-            // Copy the file to the new location
-            File.Copy(sourcePath, destinationPath, overwrite: true);
-
+            if (Directory.Exists(sourcePath))
+            {
+                DirectoryCopy(sourcePath, destinationPath);
+            }
+            else if (File.Exists(sourcePath))
+            {
+                File.Copy(sourcePath, destinationPath);
+            }
+            else
+            {
+                Log.LogMessage(MessageImportance.High, $"Task item {sourcePath} not found.");
+            }
             Log.LogMessage(MessageImportance.Low, $"Copied {sourcePath} to {destinationPath}");
+        }
+
+        private void DirectoryCopy(string sourcePath, string destinationPath)
+        {
+            DirectoryInfo diSource = new DirectoryInfo(sourcePath);
+            DirectoryInfo diTarget = new DirectoryInfo(destinationPath);
+
+            CopyAll(diSource, diTarget);
+        }
+        public static void CopyAll(DirectoryInfo source, DirectoryInfo target)
+        {
+            Directory.CreateDirectory(target.FullName);
+
+            // Copy each file into the new directory.
+            foreach (FileInfo fi in source.GetFiles())
+            {
+                fi.CopyTo(Path.Combine(target.FullName, fi.Name), true);
+            }
+
+            // Copy each subdirectory using recursion.
+            foreach (DirectoryInfo diSourceSubDir in source.GetDirectories())
+            {
+                DirectoryInfo nextTargetSubDir =
+                    target.CreateSubdirectory(diSourceSubDir.Name);
+                CopyAll(diSourceSubDir, nextTargetSubDir);
+            }
         }
 
         private string ConvertToSandboxPath(string path)
@@ -186,7 +218,6 @@ namespace MSBuildWasm
         {
             IEnumerable<PropertyInfo> properties = GetType().GetProperties().Where(p =>
                  (typeof(ITaskItem).IsAssignableFrom(p.PropertyType) || typeof(ITaskItem[]).IsAssignableFrom(p.PropertyType))
-                 // filter out properties that are not ITaskItem or ITaskItem[] or are in the blacklist use LINQ
                  && !s_nonInputPropertyNames.Contains(p.Name)
              );
 
@@ -433,7 +464,7 @@ namespace MSBuildWasm
         private ITaskItem ExtractTaskItem(JsonElement jsonElement)
         {
             string sandboxOuterPath = Path.Combine(_sharedTmpDir.FullName, jsonElement.GetProperty("WasmPath").GetString());
-            string itemSpec = jsonElement.GetProperty("ItemSpec").GetString();
+            string itemSpec = jsonElement.GetProperty("ItemSpec").GetString(); // TODO: firgure out if this is bad for security
 
             if (File.Exists(sandboxOuterPath))
             {
@@ -441,8 +472,7 @@ namespace MSBuildWasm
             }
             else if (Directory.Exists(sandboxOuterPath))
             {
-                //... TODO recurse
-
+                DirectoryCopy(sandboxOuterPath, itemSpec);
             }
             else
             {
