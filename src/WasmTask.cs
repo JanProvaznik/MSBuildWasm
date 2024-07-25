@@ -21,7 +21,7 @@ namespace MSBuildWasm
 
         // Reflection in WasmTaskFactory will add properties to a subclass.
 
-        private static readonly HashSet<string> s_nonInputPropertyNames =
+        private readonly HashSet<string> _nonInputPropertyNames =
             [nameof(WasmFilePath), nameof(InheritEnv), nameof(ExecuteFunctionName),
             nameof(Directories), nameof(InheritEnv), nameof(Environment)];
         private DirectoryInfo _sharedTmpDir;
@@ -65,10 +65,10 @@ namespace MSBuildWasm
             store.SetWasiConfiguration(GetWasiConfig());
 
             using var module = Wasmtime.Module.FromFile(engine, WasmFilePath);
-            using var linker = new Linker(engine);
+            using var linker = new WasmTaskLinker(engine, Log);
             linker.DefineWasi();
-            LinkLogFunctions(linker, store);
-            LinkTaskInfo(linker, store);
+            linker.LinkLogFunctions(store);
+            linker.LinkTaskInfo(store, null);
 
             return linker.Instantiate(store, module);
 
@@ -218,7 +218,7 @@ namespace MSBuildWasm
         {
             IEnumerable<PropertyInfo> properties = GetType().GetProperties().Where(p =>
                  (typeof(ITaskItem).IsAssignableFrom(p.PropertyType) || typeof(ITaskItem[]).IsAssignableFrom(p.PropertyType))
-                 && !s_nonInputPropertyNames.Contains(p.Name)
+                 && !_nonInputPropertyNames.Contains(p.Name)
              );
 
             foreach (PropertyInfo property in properties)
@@ -243,66 +243,14 @@ namespace MSBuildWasm
                 }
             }
         }
-        private static Dictionary<string, string> SerializeITaskItem(ITaskItem item)
-        {
-            var taskItemDict = new Dictionary<string, string>
-            {
-                ["ItemSpec"] = item.ItemSpec
-            };
-            foreach (object metadata in item.MetadataNames)
-            {
-                taskItemDict[metadata.ToString()] = item.GetMetadata(metadata.ToString());
-            }
-            return taskItemDict;
-        }
-        private static Dictionary<string, string>[] SerializeITaskItems(ITaskItem[] items)
-        {
-            return items.Select(SerializeITaskItem).ToArray();
-        }
 
-        private static bool IsSupportedType(Type type)
-        {
-            return type == typeof(string) || type == typeof(bool) || type == typeof(ITaskItem) || type == typeof(ITaskItem[]) || type == typeof(string[]) || type == typeof(bool[]);
-        }
-
-        /// <summary>
-        /// Use reflection to gather properties of this class, except for the ones on the blacklist, and serialize them to a json.
-        /// </summary>
-        /// <returns>string of a json</returns>
-        private string SerializeProperties()
-        {
-            var propertiesToSerialize = GetType()
-                                        .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                                        .Where(p => !s_nonInputPropertyNames.Contains(p.Name) && IsSupportedType(p.PropertyType))
-                                        .ToDictionary(p => p.Name, p =>
-                                        {
-                                            object value = p.GetValue(this);
-                                            if (value is ITaskItem taskItem)
-                                            {
-                                                return SerializeITaskItem(taskItem);
-                                            }
-                                            else if (value is ITaskItem[] taskItemList)
-                                            {
-                                                return SerializeITaskItems(taskItemList);
-                                            }
-                                            return value;
-                                        });
-
-            return JsonSerializer.Serialize(propertiesToSerialize);
-        }
-        // this is also not so simple D: 
-        private string SerializeDirectories()
-        {
-            // TODO: probably wrong
-            return JsonSerializer.Serialize(Directories.Select(d => d.ItemSpec).ToArray());
-        }
         private string CreateTaskInputJSON()
         {
             var sb = new StringBuilder();
             sb.Append("{\"Properties\":");
-            sb.Append(SerializeProperties());
+            sb.Append(Serializer.SerializeProperties(this, _nonInputPropertyNames));
             sb.Append(",\"Directories\":");
-            sb.Append(SerializeDirectories());
+            sb.Append(Serializer.SerializeDirectories(Directories));
             sb.Append('}');
 
             return sb.ToString();
@@ -331,51 +279,8 @@ namespace MSBuildWasm
             }
         }
 
-        /// <summary>
-        ///  returns message importance according to its int value in the enum
-        /// </summary>
-        /// <param name="value"></param>
-        /// <returns></returns>
-        public static MessageImportance ImportanceFromInt(int value)
-        {
-            return value switch
-            {
-                0 => MessageImportance.High,
-                1 => MessageImportance.Normal,
-                2 => MessageImportance.Low,
-                _ => MessageImportance.Normal,
-            };
-        }
-        /// <summary>
-        /// Links logger functions to the WebAssembly module
-        /// </summary>
-        /// <param name="linker"></param>
-        /// <param name="store"></param>
-        /// <exception cref="Exception"></exception>
-        protected void LinkLogFunctions(Linker linker, Store store)
-        {
-            linker.Define("msbuild-log", "LogMessage", Function.FromCallback(store, (Caller caller, int importance, int address, int length) =>
-            {
-                Memory memory = caller.GetMemory("memory") ?? throw new WasmtimeException("WebAssembly module did not export a memory.");
-                string message = memory.ReadString(address, length);
-                Log.LogMessage(ImportanceFromInt(importance), message);
-            }));
 
-            linker.Define("msbuild-log", "LogError", Function.FromCallback(store, (Caller caller, int address, int length) =>
-            {
-                Memory memory = caller.GetMemory("memory") ?? throw new WasmtimeException("WebAssembly module did not export a memory.");
-                string message = memory.ReadString(address, length);
-                Log.LogError(message);
-            }));
 
-            linker.Define("msbuild-log", "LogWarning", Function.FromCallback(store, (Caller caller, int address, int length) =>
-            {
-                Memory memory = caller.GetMemory("memory") ?? throw new WasmtimeException("WebAssembly module did not export a memory.");
-                string message = memory.ReadString(address, length);
-                Log.LogWarning(message);
-            }));
-            Log.LogMessage(MessageImportance.Low, "Linked logger functions to WebAssembly module.");
-        }
 
         private void ReflectJsonPropertyToClassProperty(PropertyInfo[] classProperties, JsonProperty jsonProperty)
         {
@@ -487,10 +392,6 @@ namespace MSBuildWasm
             return jsonElement.EnumerateArray().Select(ExtractTaskItem).ToArray();
         }
 
-        /// <summary>
-        /// The task requires a function "TaskInfo" to be present in the WebAssembly module, it's used only in the factory to get the task properties.
-        /// </summary>
-        protected static void LinkTaskInfo(Linker linker, Store store) => linker.Define("msbuild-taskinfo", "TaskInfo", Function.FromCallback(store, (Caller caller, int address, int length) => { /* should do nothing in execution */ }));
 
     }
 }

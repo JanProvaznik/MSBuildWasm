@@ -20,16 +20,16 @@ namespace MSBuildWasm
         private TaskLoggingHelper _log;
         private string _taskName;
         private string _taskPath;
+        public event TaskInfoEventHandler TaskInfoEvent;
 
         public WasmTaskFactory()
         {
+            TaskInfoEvent += OnTaskInfoReceived;
         }
+
 
         public Type TaskType { get; private set; }
 
-        public void CleanupTask(ITask task)
-        {
-        }
         public ITask CreateTask(IBuildEngine taskFactoryLoggingHost)
         {
             var taskInstance = Activator.CreateInstance(TaskType) as WasmTask;
@@ -93,11 +93,11 @@ namespace MSBuildWasm
             {
                 using var engine = new Engine();
                 using var module = Wasmtime.Module.FromFile(engine, _taskPath);
-                using var linker = new Linker(engine);
+                using var linker = new WasmTaskLinker(engine, _log);
                 using var store = new Store(engine);
                 linker.DefineWasi();
-                LinkEmptyLogCallbacks(linker, store);
-                LinkTaskInfo(linker, store);
+                linker.LinkLogFunctions(store);
+                linker.LinkTaskInfo(store, TaskInfoEvent);
                 Instance instance = linker.Instantiate(store, module);
                 Action getTaskInfo = instance.GetAction("GetTaskInfo");
                 if (getTaskInfo == null)
@@ -220,27 +220,14 @@ namespace MSBuildWasm
             "string[]" => typeof(string[]),
             "bool[]" => typeof(bool[]),
             "ITaskItem[]" => typeof(ITaskItem[]),
-            // TODO: ITaskItem, lists of things
             _ => throw new ArgumentException($"Unsupported transfer type: {type}")
         };
 
-        private void LinkTaskInfo(Linker linker, Store store)
+        private void OnTaskInfoReceived(object sender, string taskInfoJson)
         {
-            linker.Define("msbuild-taskinfo", "TaskInfo", Function.FromCallback(store, (Caller caller, int address, int length) =>
-            {
-                Memory memory = caller.GetMemory("memory") ?? throw new Exception("WebAssembly module did not export a memory.");
-                string propertiesString = memory.ReadString(address, length);
-                _taskParameters = ConvertJsonTaskInfoToProperties(propertiesString);
-            }));
-
-        }
-        // when running a module these functions have to be exported by the host but in the factory we run it only to get TaskProperties
-        private static void LinkEmptyLogCallbacks(Linker linker, Store store)
-        {
-            linker.Define("msbuild-log", "LogMessage", Function.FromCallback(store, (Caller caller, int importance, int address, int length) => { }));
-            linker.Define("msbuild-log", "LogError", Function.FromCallback(store, (Caller caller, int address, int length) => { }));
-            linker.Define("msbuild-log", "LogWarning", Function.FromCallback(store, (Caller caller, int address, int length) => { }));
+            _taskParameters = ConvertJsonTaskInfoToProperties(taskInfoJson);
         }
 
+        public void CleanupTask(ITask task) { }
     }
 }
