@@ -1,5 +1,5 @@
 [package]
-name = "rust_files"
+name = "rust_concat2files"
 version = "0.1.0"
 edition = "2021"
 

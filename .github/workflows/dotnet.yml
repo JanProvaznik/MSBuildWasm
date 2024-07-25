@@ -34,9 +34,9 @@ jobs:
       run: |
         cd examples/rust_template
         cargo build --release --target wasm32-wasi
-        cd ../rust_files
+        cd ../rust_concat2files
         cargo build --release --target wasm32-wasi
-        cd ../rust_directory
+        cd ../rust_mergedirectories
         cargo build --release --target wasm32-wasi
     - name: install standalone wasmtime
       run: |

@@ -21,11 +21,11 @@
     <Task>..\rust_template\target\wasm32-wasi\release\rust_template.wasm</Task>
   </UsingTask>
   <UsingTask TaskName="MyConcat" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
-    <Task>..\rust_files\target\wasm32-wasi\release\rust_files.wasm</Task>
+    <Task>..\rust_concat2files\target\wasm32-wasi\release\rust_concat2files.wasm</Task>
   </UsingTask>
 
   <UsingTask TaskName="MyMerge" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
-    <Task>..\rust_directory\target\wasm32-wasi\release\rust_directory.wasm</Task>
+    <Task>..\rust_mergedirectories\target\wasm32-wasi\release\rust_mergedirectories.wasm</Task>
   </UsingTask>
 
 

@@ -32,7 +32,7 @@ namespace WasmTasksTests
             public ConcatWasmTask() : base()
             {
                 // set some default values
-                WasmFilePath = "../../../../../examples/rust_files/target/wasm32-wasi/release/rust_files.wasm";
+                WasmFilePath = "../../../../../examples/rust_concat2files/target/wasm32-wasi/release/rust_concat2files.wasm";
                 BuildEngine = new MockEngine();
             }
         }
@@ -46,7 +46,7 @@ namespace WasmTasksTests
             public DirectoryMergeWasmTask() : base()
             {
                 // set some default values
-                WasmFilePath = "../../../../../examples/rust_directory/target/wasm32-wasi/release/rust_directory.wasm";
+                WasmFilePath = "../../../../../examples/rust_mergedirectories/target/wasm32-wasi/release/rust_mergedirectories.wasm";
                 BuildEngine = new MockEngine();
             }
         }

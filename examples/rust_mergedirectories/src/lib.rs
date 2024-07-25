@@ -21,17 +21,16 @@ pub enum TaskResult {
 }
 
 // Import logging as functions from the host environment
-#[link(wasm_import_module = "msbuild-log")]
-#[allow(dead_code)]
+#[link(wasm_import_module = "msbuild-log")] #[allow(dead_code)]
 extern "C" {
-    fn LogError(ptr: *const c_char, len: usize);
-    fn LogWarning(ptr: *const c_char, len: usize);
-    fn LogMessage(messageImportance: MessageImportance, ptr: *const c_char, len: usize);
+    fn LogError(message: *const c_char, message_length: usize);
+    fn LogWarning(message: *const c_char, message_legth: usize);  
+    fn LogMessage(messageImportance: MessageImportance, message: *const c_char, message_length: usize);
 }
 
 #[link(wasm_import_module = "msbuild-taskinfo")]
 extern "C" {
-    fn TaskInfo(ptr: *const c_char, len: usize); // this is a ptr to a json string
+    fn TaskInfo(task_info_json: *const c_char, task_info_length: usize); // this is a ptr to a json string
 }
 
 #[derive(serde::Deserialize)]

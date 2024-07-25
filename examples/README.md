@@ -4,8 +4,8 @@
 
 
 - `rust_template` - sample implementation showcasing logging
-- `rust_files` - merges 2 files
-- `rust_directory` - merges contents of *N* directories
+- `rust_concat2files` - merges 2 files
+- `rust_mergedirectories` - merges contents of *N* directories
 
 ## Using rust to create tasks:
 1. go to it's directory and `cargo build --target wasm32-wasi --release`
