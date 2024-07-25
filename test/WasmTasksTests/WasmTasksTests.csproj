@@ -25,6 +25,10 @@
     <Reference Include="Microsoft.Build.UnitTests.Shared">
       <HintPath>$(MSBuildThisFileDirectory)\..\..\msbuild\artifacts\bin\Microsoft.Build.UnitTests.Shared\Debug\net8.0\Microsoft.Build.UnitTests.Shared.dll</HintPath>
     </Reference>
+    <Reference Include="Microsoft.Build.Framework">
+      <HintPath>$(MSBuildThisFileDirectory)\..\..\msbuild\artifacts\bin\Microsoft.Build.Framework\Debug\net8.0\Microsoft.Build.Framework.dll</HintPath>
+
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>

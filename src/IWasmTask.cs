@@ -12,7 +12,5 @@ namespace MSBuildWasm
 {
     public interface IWasmTask : ITask
     {
-        [Required]
-        public string WasmFilePath { get; set; }
     }
 }

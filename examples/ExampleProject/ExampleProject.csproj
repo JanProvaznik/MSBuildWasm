@@ -11,22 +11,38 @@
     <ProjectReference Include="../../src/MSBuildWasm.csproj" />
   </ItemGroup>
 
-  <UsingTask TaskName="MSBuildWasm.WasmTask" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
-  <UsingTask TaskName="MSBuildWasm.WasmExec" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="TaskHostFactory" />
+  <ItemGroup>
+    <I1 Include="resources\..\resources\file1.txt" />
+    <I2 Include="resources\file2.txt" />
+    <I3 Include="resources\;resources\"/>
+  </ItemGroup>
 
-<Target Name="RunWasm1" BeforeTargets="AfterBuild">
-		<WasmTask WasmFilePath="..\rust_template\target\wasm32-wasi\release\rust_template.wasm" EnableTmp="false" EnableIO="true" />
-	</Target>
-  
-<Target Name="RunWasm2" BeforeTargets="AfterBuild">
-		<WasmTask WasmFilePath="..\rust_files\target\wasm32-wasi\release\rust_files.wasm" EnableTmp="true" HomeDir='yes' EnableIO="true" />
-	</Target>
-  
-<Target Name="RunWasm3" BeforeTargets="AfterBuild">
-		<WasmTask WasmFilePath="..\rust_hello\target\wasm32-wasi\release\rust_hello.wasm" EnableTmp="true" HomeDir='yes' EnableIO="true" />
-	</Target>
+  <UsingTask TaskName="Template" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
+    <Task>..\rust_template\target\wasm32-wasi\release\rust_template.wasm</Task>
+  </UsingTask>
+  <UsingTask TaskName="MyConcat" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
+    <Task>..\rust_concat2files\target\wasm32-wasi\release\rust_concat2files.wasm</Task>
+  </UsingTask>
 
-<Target Name="WasmExec" BeforeTargets="AfterBuild">
-		<WasmExec WasmFilePath="..\rust_executable\target\wasm32-wasi\release\rust_executable.wasm" WasmtimeArgs="" />
-	</Target>
+  <UsingTask TaskName="MyMerge" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
+    <Task>..\rust_mergedirectories\target\wasm32-wasi\release\rust_mergedirectories.wasm</Task>
+  </UsingTask>
+
+
+  <Target Name="WasmTasks" BeforeTargets="AfterBuild">
+    <Template TestRequiredProperty="hello">
+      <Output TaskParameter="TestOutputProperty" PropertyName="OutputProperty"/>
+    </Template>
+
+    <MyConcat InputFile1="@(I1)" InputFile2="@(I2)">
+      <Output TaskParameter="OutputFile" PropertyName="Outfile"/>
+    </MyConcat>
+
+    <MyMerge Dirs="@(I3)">
+      <Output TaskParameter="MergedDir" PropertyName="M"/>
+    </MyMerge>
+
+    <Warning Text="Output file: $(Outfile)" />
+
+  </Target>
 </Project>
