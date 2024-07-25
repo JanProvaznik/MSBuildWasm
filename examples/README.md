@@ -1,8 +1,11 @@
 # Examples of tasks in other languages used in .NET
 
-- `ExampleProject` - project containing .csproj file importing the Wasm/WASI tasks
+- `ExampleProject` - .NET project containing .csproj file importing the Wasm/WASI tasks
 
-- `rust_hello`
+
+- `rust_template` - sample implementation showcasing logging
+- `rust_files` - merges 2 files
+- `rust_directory` - merges contents of *N* directories
 
 ## Using rust to create tasks:
 1. go to it's directory and `cargo build --target wasm32-wasi --release`

@@ -1,5 +1,11 @@
-MSBuild Tasks for Wasm/WASI
-see [spec](https://github.com/dotnet/msbuild/pull/10259) for why:
+ Wasm/WASI for MSBuild
+- MSBuild task is an unit of execution inside a build, [that can be created by users of MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/tutorial-custom-task-code-generation)
+- experimental project exporing using Wasm/WASI to create MSBuild tasks
+- Wasm/WASI supports multiple languages extending the notion of a MSBuild Task from a C# class to a Wasm module
+    - Rust example tasks [examples/]
+- The tasks run in a Wasm/WASI runtime - [Wasmtime](https://github.com/bytecodealliance/wasmtime) which sandboxes the execution from the rest of the system and files/directories a task allowed to touch have to be specified.
+
+see [spec](https://github.com/dotnet/msbuild/pull/10259) for details
 
 ## User manual
 Create a MSBuild task using Wasm/WASI toolchain.
@@ -15,9 +21,9 @@ Create a MSBuild task using Wasm/WASI toolchain.
 3. use the task in a target
 ```xml
 <Target Name="MyWasmTarget" AfterTargets="Build">
-<MyWasmTask Param="StringParam" Param2="true">
-<Output TaskParameter="Result" PropertyName="TaskResult"/>
-</MyWasmTask>
+  <MyWasmTask Param="StringParam" Param2="true">
+      <Output TaskParameter="Result" PropertyName="TaskResult"/>
+  </MyWasmTask>
 </Target>
 ```
 4. `dotnet build`

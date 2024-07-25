@@ -40,7 +40,7 @@
 
     <MyMerge Dirs="@(I3)">
       <Output TaskParameter="MergedDir" PropertyName="M"/>
-      </MyMerge>
+    </MyMerge>
 
     <Warning Text="Output file: $(Outfile)" />
 
