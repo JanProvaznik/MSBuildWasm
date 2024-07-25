@@ -129,7 +129,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-directory"
+name = "rust_mergedirectories"
 version = "0.1.0"
 dependencies = [
  "serde",

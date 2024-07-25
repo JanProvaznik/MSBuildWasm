@@ -129,7 +129,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "rust-template"
+name = "rust_template"
 version = "0.1.0"
 dependencies = [
  "serde_json",
