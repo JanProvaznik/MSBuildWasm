@@ -6,15 +6,14 @@ use std::io;
 use serde_json::Value;
 use serde::Deserialize;
 
-#[repr(C)]
-#[allow(dead_code)]
-enum MessageImportance {
+#[repr(C)] #[allow(dead_code)]
+pub enum MessageImportance {
     High,
     Normal,
     Low,
 }
 
-#[repr(C)]
+#[repr(C)] #[allow(dead_code)]
 pub enum TaskResult {
     Success,
     Failure,
@@ -28,9 +27,38 @@ extern "C" {
     fn LogMessage(messageImportance: MessageImportance, message: *const c_char, message_length: usize);
 }
 
+#[allow(dead_code)]
+fn log_message(messageImportance: MessageImportance, message: &str) {
+    let c_message = CString::new(message).unwrap();
+    unsafe {
+        LogMessage(messageImportance, c_message.as_ptr(), c_message.to_bytes().len());
+    }
+}
+#[allow(dead_code)]
+fn log_error(message: &str) {
+    let c_message = CString::new(message).unwrap();
+    unsafe {
+        LogError(c_message.as_ptr(), c_message.to_bytes().len());
+    }
+}
+#[allow(dead_code)]
+fn log_warning(message: &str) {
+    let c_message = CString::new(message).unwrap();
+    unsafe {
+        LogWarning(c_message.as_ptr(), c_message.to_bytes().len());
+    }
+}
+
 #[link(wasm_import_module = "msbuild-taskinfo")]
 extern "C" {
     fn TaskInfo(task_info_json: *const c_char, task_info_length: usize); // this is a ptr to a json string
+}
+
+fn task_info(task_info_json: &str) {
+    let c_message = CString::new(task_info_json).unwrap();
+    unsafe {
+        TaskInfo(c_message.as_ptr(), c_message.to_bytes().len());
+    }
 }
 
 #[derive(serde::Deserialize)]
@@ -61,25 +89,18 @@ pub fn Execute() -> TaskResult {
         .collect();
     merge_directories(&wasm_paths, "output_dir").unwrap();
 
-    let out_json_str = CString::new(r#"{"MergedDir":{"ItemSpec":"output_dir","WasmPath":"output_dir"}}"#).unwrap();
-    unsafe {
         for path in wasm_paths {
-            let message = CString::new(format!("WasmPath: {}", path)).unwrap();
-            LogWarning(message.as_ptr(), message.to_bytes().len());
-        }
+        log_warning(&format!("WasmPath: {}", path));
     }
 
-    println!("{}", out_json_str.to_str().unwrap());
+    println!("{}", r#"{"MergedDir":{"ItemSpec":"output_dir","WasmPath":"output_dir"}}"#);
     return TaskResult::Success;
 }
 
 #[no_mangle]
 #[allow(non_snake_case)]
 pub fn GetTaskInfo() {
-    let c_string = CString::new(r#"{"Properties":{"Dirs":{"type":"ITaskItem[]","required":true,"output":false},"MergedDir":{"type":"ITaskItem","required":false,"output":true},"MergedName":{"type":"string","required":false,"output":false}}}"#).unwrap();
-    unsafe {
-        TaskInfo(c_string.as_ptr(), c_string.to_bytes().len());
-    }
+    task_info(r#"{"Properties":{"Dirs":{"type":"ITaskItem[]","required":true,"output":false},"MergedDir":{"type":"ITaskItem","required":false,"output":true},"MergedName":{"type":"string","required":false,"output":false}}}"#);
 }
 
 fn merge_directories(paths: &[String], output_name: &str) -> io::Result<()> {

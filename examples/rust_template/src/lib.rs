@@ -2,13 +2,13 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 
 #[repr(C)] #[allow(dead_code)]
-enum MessageImportance {
+pub enum MessageImportance {
     High,
     Normal,
     Low
 }
 
-#[repr(C)]
+#[repr(C)] #[allow(dead_code)]
 pub enum TaskResult {
     Success,  
     Failure 
@@ -22,11 +22,39 @@ extern "C" {
     fn LogMessage(messageImportance: MessageImportance, message: *const c_char, message_length: usize);
 }
 
+#[allow(dead_code)]
+fn log_message(messageImportance: MessageImportance, message: &str) {
+    let c_message = CString::new(message).unwrap();
+    unsafe {
+        LogMessage(messageImportance, c_message.as_ptr(), c_message.to_bytes().len());
+    }
+}
+#[allow(dead_code)]
+fn log_error(message: &str) {
+    let c_message = CString::new(message).unwrap();
+    unsafe {
+        LogError(c_message.as_ptr(), c_message.to_bytes().len());
+    }
+}
+#[allow(dead_code)]
+fn log_warning(message: &str) {
+    let c_message = CString::new(message).unwrap();
+    unsafe {
+        LogWarning(c_message.as_ptr(), c_message.to_bytes().len());
+    }
+}
+
 #[link(wasm_import_module = "msbuild-taskinfo")]
 extern "C" {
     fn TaskInfo(task_info_json: *const c_char, task_info_length: usize); // this is a ptr to a json string
 }
 
+fn task_info(task_info_json: &str) {
+    let c_message = CString::new(task_info_json).unwrap();
+    unsafe {
+        TaskInfo(c_message.as_ptr(), c_message.to_bytes().len());
+    }
+}
 
 #[no_mangle] #[allow(non_snake_case)]
 pub fn Execute() -> TaskResult
@@ -35,23 +63,16 @@ pub fn Execute() -> TaskResult
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).unwrap();
 
-        // let errorMessage = CString::new("Error message from Wasm").unwrap(); // we don't want the template task failing
+        
+        // log_error("Error message from Wasm"); // we don't want the template task failing
         // show what the template task got on input
-        let warning_message= CString::new(input).unwrap();
-        let message1= CString::new("High priority message from Wasm").unwrap();
-        let message2 = CString::new("Normal priority message from Wasm").unwrap();
-        let message3 = CString::new("Low priority message from Wasm").unwrap();
-        let out_json_str = CString::new(r#"{"TestOutputProperty":"This is the output property value from WASM task"}"#).unwrap();
-        unsafe
-        {
-            // LogError(errorMessage.as_ptr(), errorMessage.to_bytes().len());
-            LogWarning(warning_message.as_ptr(), warning_message.to_bytes().len());
-            LogMessage(MessageImportance::High, message1.as_ptr(), message1.to_bytes().len());
-            LogMessage(MessageImportance::Normal, message2.as_ptr(), message2.to_bytes().len());
-            LogMessage(MessageImportance::Low, message3.as_ptr(), message3.to_bytes().len());
-            // task output properties in stdout
-            println!("{}", out_json_str.to_str().unwrap());
-        }
+        log_warning(&input);
+        log_message(MessageImportance::High, "High priority message from Wasm");
+        log_message(MessageImportance::Normal, "Normal priority message from Wasm");
+        log_message(MessageImportance::Low, "Low priority message from Wasm");
+        
+        
+        println!("{}",r#"{"TestOutputProperty":"This is the output property value from WASM task"}"#);
 
         return TaskResult::Success;
 }
@@ -59,9 +80,5 @@ pub fn Execute() -> TaskResult
 #[no_mangle] #[allow(non_snake_case)]
 pub fn GetTaskInfo() 
 {
-    let c_string = CString::new(r#"{"Properties":{"TestNormalProperty":{"type":"string","required":false,"output":false},"TestOutputProperty":{"type":"string","required":false,"output":true},"TestRequiredProperty":{"type":"string","required":true,"output":false},"TestBoolProperty":{"type":"bool","required":false,"output":false}}}"#).unwrap();
-    unsafe 
-    {
-    TaskInfo(c_string.as_ptr(), c_string.to_bytes().len());
-    }
+    task_info(r#"{"Properties":{"TestNormalProperty":{"type":"string","required":false,"output":false},"TestOutputProperty":{"type":"string","required":false,"output":true},"TestRequiredProperty":{"type":"string","required":true,"output":false},"TestBoolProperty":{"type":"bool","required":false,"output":false}}}"#);
 }

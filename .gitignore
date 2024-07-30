@@ -3,3 +3,4 @@ obj/
 .vs
 Playground/
 /MSBuildWasmLocal.sln
+/examples/go

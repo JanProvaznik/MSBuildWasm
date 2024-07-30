@@ -2,13 +2,13 @@ use std::ffi::CString;
 use std::os::raw::c_char;
 
 #[repr(C)] #[allow(dead_code)]
-enum MessageImportance {
+pub enum MessageImportance {
     High,
     Normal,
     Low
 }
 
-#[repr(C)]
+#[repr(C)] #[allow(dead_code)]
 pub enum TaskResult {
     Success,  
     Failure 
@@ -22,9 +22,38 @@ extern "C" {
     fn LogMessage(messageImportance: MessageImportance, message: *const c_char, message_length: usize);
 }
 
+#[allow(dead_code)]
+fn log_message(messageImportance: MessageImportance, message: &str) {
+    let c_message = CString::new(message).unwrap();
+    unsafe {
+        LogMessage(messageImportance, c_message.as_ptr(), c_message.to_bytes().len());
+    }
+}
+#[allow(dead_code)]
+fn log_error(message: &str) {
+    let c_message = CString::new(message).unwrap();
+    unsafe {
+        LogError(c_message.as_ptr(), c_message.to_bytes().len());
+    }
+}
+#[allow(dead_code)]
+fn log_warning(message: &str) {
+    let c_message = CString::new(message).unwrap();
+    unsafe {
+        LogWarning(c_message.as_ptr(), c_message.to_bytes().len());
+    }
+}
+
 #[link(wasm_import_module = "msbuild-taskinfo")]
 extern "C" {
     fn TaskInfo(task_info_json: *const c_char, task_info_length: usize); // this is a ptr to a json string
+}
+
+fn task_info(task_info_json: &str) {
+    let c_message = CString::new(task_info_json).unwrap();
+    unsafe {
+        TaskInfo(c_message.as_ptr(), c_message.to_bytes().len());
+    }
 }
 
 
@@ -68,9 +97,5 @@ pub fn Execute() -> TaskResult
 #[no_mangle] #[allow(non_snake_case)]
 pub fn GetTaskInfo() 
 {
-    let c_string = CString::new(r#"{"Properties":{"InputFile1":{"type":"ITaskItem","required":true,"output":false},"InputFile2":{"type":"ITaskItem","required":true,"output":false},"OutputFile":{"type":"ITaskItem","required":false,"output":true}}}"#).unwrap();
-    unsafe 
-    {
-    TaskInfo(c_string.as_ptr(), c_string.to_bytes().len());
-    }
+    task_info(r#"{"Properties":{"InputFile1":{"type":"ITaskItem","required":true,"output":false},"InputFile2":{"type":"ITaskItem","required":true,"output":false},"OutputFile":{"type":"ITaskItem","required":false,"output":true}}}"#);
 }
