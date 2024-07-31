@@ -35,21 +35,21 @@ jobs:
         cargo build --release --target wasm32-wasi --manifest-path templates/RustWasmTaskTemplate/rust_template/Cargo.toml
         cargo build --release --target wasm32-wasi --manifest-path examples/rust_mergedirectories/Cargo.toml
         cargo build --release --target wasm32-wasi --manifest-path examples/rust_concat2files/Cargo.toml
-    - name: install standalone wasmtime
-      run: |
-        curl https://wasmtime.dev/install.sh -sSf | bash
-        echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
-        export PATH=$HOME/.wasmtime/bin:$PATH
-        wasmtime --version
+    # - name: install standalone wasmtime
+    #   run: |
+    #     curl https://wasmtime.dev/install.sh -sSf | bash
+    #     echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
+    #     export PATH=$HOME/.wasmtime/bin:$PATH
+    #     wasmtime --version
     - name: Get global-packages path
       id: get-packages-path
       run: |
         PACKAGES_PATH=$(dotnet nuget locals global-packages -l | cut -d ' ' -f 2)
         echo "packages_path=$PACKAGES_PATH" >> $GITHUB_OUTPUT
     - name: Build
-      run: dotnet build src
+      run: dotnet build src/ -c Release
     - name: Package
-      run: dotnet pack src -o ${{ steps.get-packages-path.outputs.packages_path }}
+      run: dotnet pack src/ -o ${{ steps.get-packages-path.outputs.packages_path }}
     - name: Examples
       run: dotnet build examples
     - name: build MSBuild for unit test .dll
