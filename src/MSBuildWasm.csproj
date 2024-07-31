@@ -22,13 +22,15 @@
     <Authors>Jan Provaznik</Authors>
     <Company>Microsoft</Company>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <RuntimeIdentifiers>win-x64;linux-x64;osx-arm64</RuntimeIdentifiers>
+    <SelfContained>true</SelfContained>
 
     <!-- This target will run when MSBuild is collecting the files to be packaged, and we'll implement it below. This property controls the dependency list for this packaging process, so by adding our custom property we hook ourselves into the process in a supported way. -->
     <TargetsForTfmSpecificBuildOutput>
         $(TargetsForTfmSpecificBuildOutput);CopyProjectReferencesToPackage
     </TargetsForTfmSpecificBuildOutput>
     <!-- This property tells MSBuild where the root folder of the package's build assets should be. Because we are not a library package, we should not pack to 'lib'. Instead, we choose 'tasks' by convention. -->
-    <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
+    <!-- <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder> -->
     <!-- NuGet does validation that libraries in a package are exposed as dependencies, but we _explicitly_ do not want that behavior for MSBuild tasks. They are isolated by design. Therefore we ignore this specific warning. -->
     <NoWarn>NU5100</NoWarn>
     <!-- Suppress NuGet warning NU5128. -->
