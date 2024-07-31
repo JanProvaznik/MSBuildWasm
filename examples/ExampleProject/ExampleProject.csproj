@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../../src/MSBuildWasm.csproj" />
+    <PackageReference Include="MSBuildWasm" Version="0.1.0" />
   </ItemGroup>
 
   <ItemGroup>
@@ -17,14 +17,14 @@
     <I3 Include="resources\;resources\"/>
   </ItemGroup>
 
-  <UsingTask TaskName="Template" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
-    <Task>..\..\src\templates\RustWasmTask\rust_template\target\wasm32-wasi\release\rust_template.wasm</Task>
+  <UsingTask TaskName="Template" AssemblyFile="$(MSBuildWasmAssembly) " TaskFactory="WasmTaskFactory">
+    <Task>..\..\templates\RustWasmTaskTemplate\rust_template\target\wasm32-wasi\release\rust_template.wasm</Task>
   </UsingTask>
-  <UsingTask TaskName="MyConcat" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
+  <UsingTask TaskName="MyConcat" AssemblyFile="$(MSBuildWasmAssembly) " TaskFactory="WasmTaskFactory">
     <Task>..\rust_concat2files\target\wasm32-wasi\release\rust_concat2files.wasm</Task>
   </UsingTask>
 
-  <UsingTask TaskName="MyMerge" AssemblyFile="..\..\src\bin\Release\net8.0\publish\MSBuildWasm.dll" TaskFactory="WasmTaskFactory">
+  <UsingTask TaskName="MyMerge" AssemblyFile="$(MSBuildWasmAssembly) " TaskFactory="WasmTaskFactory">
     <Task>..\rust_mergedirectories\target\wasm32-wasi\release\rust_mergedirectories.wasm</Task>
   </UsingTask>
 

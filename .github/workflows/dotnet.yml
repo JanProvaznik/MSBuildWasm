@@ -41,8 +41,15 @@ jobs:
         echo "$HOME/.wasmtime/bin" >> $GITHUB_PATH
         export PATH=$HOME/.wasmtime/bin:$PATH
         wasmtime --version
-    - name: Publish
-      run: dotnet publish src
+    - name: Get global-packages path
+      id: get-packages-path
+      run: |
+        PACKAGES_PATH=$(dotnet nuget locals global-packages -l | cut -d ' ' -f 2)
+        echo "packages_path=$PACKAGES_PATH" >> $GITHUB_OUTPUT
+    - name: Build
+      run: dotnet build src
+    - name: Package
+      run: dotnet pack src -o ${{ steps.get-packages-path.outputs.packages_path }}
     - name: Examples
       run: dotnet build examples
     - name: build MSBuild for unit test .dll
