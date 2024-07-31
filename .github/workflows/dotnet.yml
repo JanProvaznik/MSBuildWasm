@@ -32,12 +32,9 @@ jobs:
         target: wasm32-wasi
     - name: Compile Rust tasks 
       run: |
-        cd examples/rust_template
-        cargo build --release --target wasm32-wasi
-        cd ../rust_concat2files
-        cargo build --release --target wasm32-wasi
-        cd ../rust_mergedirectories
-        cargo build --release --target wasm32-wasi
+        cargo build --release --target wasm32-wasi --manifest-path templates/RustWasmTaskTemplate/rust_template/Cargo.toml
+        cargo build --release --target wasm32-wasi --manifest-path examples/rust_mergedirectories/Cargo.toml
+        cargo build --release --target wasm32-wasi --manifest-path examples/rust_concat2files/Cargo.toml
     - name: install standalone wasmtime
       run: |
         curl https://wasmtime.dev/install.sh -sSf | bash
