@@ -50,6 +50,8 @@ jobs:
       run: dotnet build src/ -c Release
     - name: Package
       run: dotnet pack src/ -o ${{ steps.get-packages-path.outputs.packages_path }}
+    - name: Add local NuGet source
+      run: dotnet nuget add source ${{ steps.get-packages-path.outputs.packages_path }} --name local
     - name: Examples
       run: dotnet build examples
     - name: build MSBuild for unit test .dll
