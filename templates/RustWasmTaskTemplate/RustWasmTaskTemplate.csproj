@@ -16,7 +16,7 @@
   </Target>
 
 
-  <UsingTask TaskName="Template" AssemblyFile="$(MSBuildWasmAssembly) " TaskFactory="WasmTaskFactory" >
+  <UsingTask TaskName="Template" AssemblyFile="$(MSBuildWasmAssembly).dll" TaskFactory="WasmTaskFactory" >
     <Task>rust_template\target\wasm32-wasi\release\rust_template.wasm</Task> 
   </UsingTask>
 
