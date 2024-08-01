@@ -37,7 +37,6 @@
     <!-- Suppress NuGet warning NU5128. -->
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <GenerateDependencyFile>true</GenerateDependencyFile>
-    <ApplicationIcon>msbuildwasmlogo.png</ApplicationIcon>
     <Title>MSBuild Tasks in Wasm</Title>
     <Description>Introduces the WasmTaskFactory which creates MSBuild Tasks from .wasm modules.
 </Description>
