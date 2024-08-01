@@ -23,8 +23,6 @@
     <Authors>Jan Provaznik</Authors>
     <Company>Microsoft</Company>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <RuntimeIdentifiers>win-x64;linux-x64;osx-arm64</RuntimeIdentifiers>
-    <!-- <SelfContained>true</SelfContained> -->
 
     <!-- This target will run when MSBuild is collecting the files to be packaged, and we'll implement it below. This property controls the dependency list for this packaging process, so by adding our custom property we hook ourselves into the process in a supported way. -->
     <TargetsForTfmSpecificBuildOutput>
@@ -44,6 +42,7 @@
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <RepositoryUrl>https://github.com/JanProvaznik/MSBuildWasm</RepositoryUrl>
     <PackageTags>MSBuild;Wasm;WebAssembly</PackageTags>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
 
   </PropertyGroup>
 
@@ -133,6 +132,10 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
     <None Include="..\msbuildwasmlogo.png">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
