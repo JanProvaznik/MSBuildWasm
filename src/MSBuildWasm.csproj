@@ -13,6 +13,7 @@
         for automatic inclusion in the build. -->
     <Content Include="build\MSBuildWasm.props" PackagePath="build\" />
     <Content Include="build\MSBuildWasm.targets" PackagePath="build\" />
+    <Content Include="msbuildwasmlogo.png" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -36,18 +37,22 @@
     <!-- Suppress NuGet warning NU5128. -->
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <GenerateDependencyFile>true</GenerateDependencyFile>
+    <ApplicationIcon>msbuildwasmlogo.png</ApplicationIcon>
+    <Title>MSBuild Tasks in Wasm</Title>
+    <Description>Introduces the WasmTaskFactory which creates MSBuild Tasks from .wasm modules.
+</Description>
+    <PackageIcon>msbuildwasmlogo.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/JanProvaznik/MSBuildWasm</RepositoryUrl>
+    <PackageTags>MSBuild;Wasm;WebAssembly</PackageTags>
 
   </PropertyGroup>
 
   <!-- This is the target we defined above. It's purpose is to add all of our PackageReference and ProjectReference's runtime assets to our package output.  -->
-  <Target
-    Name="CopyProjectReferencesToPackage"
-    DependsOnTargets="ResolveReferences">
+  <Target Name="CopyProjectReferencesToPackage" DependsOnTargets="ResolveReferences">
     <ItemGroup>
         <!-- The TargetPath is the path inside the package that the source file will be placed. This is already precomputed in the ReferenceCopyLocalPaths items' DestinationSubPath, so reuse it here. -->
-        <BuildOutputInPackage
-            Include="@(ReferenceCopyLocalPaths)"
-            TargetPath="%(ReferenceCopyLocalPaths.DestinationSubPath)" />
+        <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths)" TargetPath="%(ReferenceCopyLocalPaths.DestinationSubPath)" />
     </ItemGroup>
   </Target>
 
@@ -127,5 +132,17 @@
       <PackagePath>tasks/net8.0/runtimes/win-x64/native/</PackagePath>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="..\msbuildwasmlogo.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
   </ItemGroup>
 </Project>
