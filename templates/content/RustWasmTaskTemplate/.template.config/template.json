@@ -12,10 +12,6 @@
     "language": "Rust",
     "type": "project"
   },
-  "primaryOutputs": [
-    { "path": "task.rs" },
-    { "path": "RunWasmTask.csproj" }
-  ],
   "postActions": [
     {
       "id": "restore",

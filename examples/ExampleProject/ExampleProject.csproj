@@ -18,7 +18,7 @@
   </ItemGroup>
 
   <UsingTask TaskName="Template" AssemblyFile="$(MSBuildWasmAssembly)" TaskFactory="WasmTaskFactory" Condition="$(MSBuildWasmAssembly) != ''">
-    <Task>..\..\templates\RustWasmTaskTemplate\rust_template\target\wasm32-wasi\release\rust_template.wasm</Task>
+    <Task>..\..\templates\content\RustWasmTaskTemplate\rust_template\target\wasm32-wasi\release\rust_template.wasm</Task>
   </UsingTask>
   <UsingTask TaskName="MyConcat" AssemblyFile="$(MSBuildWasmAssembly)" TaskFactory="WasmTaskFactory" Condition="$(MSBuildWasmAssembly) != ''">
     <Task>..\rust_concat2files\target\wasm32-wasi\release\rust_concat2files.wasm</Task>
@@ -40,6 +40,7 @@
 
     <MyMerge Dirs="@(I3)">
       <Output TaskParameter="MergedDir" PropertyName="M"/>
+
     </MyMerge>
 
     <Warning Text="Output file: $(Outfile)" />

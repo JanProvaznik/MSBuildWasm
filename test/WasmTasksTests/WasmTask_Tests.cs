@@ -19,7 +19,7 @@ namespace WasmTasksTests
             public TemplateWasmTask() : base()
             {
                 // set some default values
-                WasmFilePath = "../../../../../templates/RustWasmTaskTemplate/rust_template/target/wasm32-wasi/release/rust_template.wasm";
+                WasmFilePath = "../../../../../templates/content/RustWasmTaskTemplate/rust_template/target/wasm32-wasi/release/rust_template.wasm";
                 BuildEngine = new MockEngine();
             }
         }

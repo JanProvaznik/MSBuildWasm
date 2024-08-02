@@ -1,4 +1,6 @@
- Wasm/WASI for MSBuild
+# Wasm/WASI tasks for MSBuild
+**EXPERIMENTAL**
+
 - MSBuild task is an unit of execution inside a build, [that can be created by users of MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/tutorial-custom-task-code-generation)
 - experimental project exporing using Wasm/WASI to create MSBuild tasks
 - Wasm/WASI supports multiple languages extending the notion of a MSBuild Task from a C# class to a Wasm module
