@@ -5,7 +5,7 @@
     <!--The folder where the custom task will be present. It points to inside the nuget package. -->
     <_MSBuildWasmFolder>$(MSBuildThisFileDirectory)..\tasks\net8.0</_MSBuildWasmFolder>
     <!--Reference to the assembly which contains the MSBuild Task-->
-    <MSBuildWasmAssembly>$(_MSBuildWasmFolder)\$(MSBuildThisFileName)</MSBuildWasmAssembly>
+    <MSBuildWasmAssembly>$(_MSBuildWasmFolder)\$(MSBuildThisFileName).dll</MSBuildWasmAssembly>
 </PropertyGroup>
 
 </Project>

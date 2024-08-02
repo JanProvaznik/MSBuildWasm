@@ -31,3 +31,14 @@ Create a MSBuild task using Wasm/WASI toolchain.
 Inputs and outputs from a tasks can be bools, strings and "ITaskItem" which is basically a file path.
 
 [Writing tasks for MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/task-writing)
+
+
+## License
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+### Third-party Licenses
+This project includes software developed under the Apache License, Version 2.0:
+Wasmtime - https://github.com/bytecodealliance/wasmtime
+Wasmtime.Dotnet - https://github.com/bytecodealliance/wasmtime-dotnet
+
+For full terms and conditions, please see the Apache 2.0 license.

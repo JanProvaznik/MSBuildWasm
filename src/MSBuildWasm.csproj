@@ -19,7 +19,7 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>MSBuildWasm</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.0-alpha</Version>
     <Authors>Jan Provaznik</Authors>
     <Company>Microsoft</Company>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
@@ -133,6 +133,10 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\THIRDPARTYNOTICES.txt">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
