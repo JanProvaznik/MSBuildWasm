@@ -22,6 +22,9 @@
     <Version>0.1.0</Version>
     <Authors>Jan Provaznik</Authors>
     <Company>Microsoft</Company>
+    <TargetsForTfmSpecificBuildOutput>
+      $(TargetsForTfmSpecificBuildOutput);_CopyManagedDependenciesToPackage
+  </TargetsForTfmSpecificBuildOutput>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <!-- This property tells MSBuild where the root folder of the package's build assets should be. Because we are not a library package, we should not pack to 'lib'. Instead, we choose 'tasks' by convention. -->
     <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
@@ -30,6 +33,8 @@
     <!-- Suppress NuGet warning NU5128. -->
     <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
     <GenerateDependencyFile>true</GenerateDependencyFile>
+    <!-- Tell NuGet that native dependency extensions are ok -->
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>.so;.dylib</AllowedOutputExtensionsInPackageBuildOutputFolder>
     <Title>MSBuild Tasks in Wasm</Title>
     <Description>Introduces the WasmTaskFactory which creates MSBuild Tasks from .wasm modules.
 </Description>
@@ -52,10 +57,17 @@
             FinalOutputPath="$(ProjectDepsFilePath)" />
     </ItemGroup>
 </Target>
-<Target Name="IncludeWasmLibs" BeforeTargets="_GetPackageFiles">
+
+<!-- This is the target we defined above. It's purpose is to add all of our PackageReference and ProjectReference's runtime assets to our package output.  -->
+<Target Name="_CopyManagedDependenciesToPackage" DependsOnTargets="ResolveReferences">
   <ItemGroup>
-    <_WasmRuntimeFiles Include="$(PkgWasmtime)\runtimes\**\*.*"/>
-    <_PackageFiles Include="@(_WasmRuntimeFiles)" Pack="true" PackagePath="tasks\$(TargetFramework)\runtimes\%(_WasmRuntimeFiles.RecursiveDir)%(_WasmRuntimeFiles.Filename)%(_WasmRuntimeFiles.Extension)" />
+
+    <_ManagedReferences Include="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.AssetType)' == 'runtime'" />
+    <_WasmRuntimeFiles Include="$(PkgWasmtime)\runtimes\**\*.*" />
+    <_WasmRuntimeFiles DestinationSubPath="runtimes\%(_WasmRuntimeFiles.RecursiveDir)%(_WasmRuntimeFiles.Filename)%(_WasmRuntimeFiles.Extension)" />
+    <!-- The TargetPath is the path inside the package that the source file will be placed. This is already precomputed in the ReferenceCopyLocalPaths items' DestinationSubPath, so reuse it here. -->
+    <BuildOutputInPackage Include="@(_ManagedReferences)" TargetPath="%(_ManagedReferences.DestinationSubPath)" />
+    <BuildOutputInPackage Include="@(_WasmRuntimeFiles)" TargetPath="%(_WasmRuntimeFiles.DestinationSubPath)" />
   </ItemGroup>
 </Target>
 
@@ -94,6 +106,7 @@
       Version="22.0.0"
       PrivateAssets="all"
     />
+
   </ItemGroup>
   <ItemGroup>
     <None Include="..\LICENSE">
