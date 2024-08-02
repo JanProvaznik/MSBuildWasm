@@ -23,6 +23,11 @@
     <Authors>Jan Provaznik</Authors>
     <Company>Microsoft</Company>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+
+    <!-- This target will run when MSBuild is collecting the files to be packaged, and we'll implement it below. This property controls the dependency list for this packaging process, so by adding our custom property we hook ourselves into the process in a supported way. -->
+    <TargetsForTfmSpecificBuildOutput>
+        $(TargetsForTfmSpecificBuildOutput);CopyProjectReferencesToPackage
+    </TargetsForTfmSpecificBuildOutput>
     <!-- This property tells MSBuild where the root folder of the package's build assets should be. Because we are not a library package, we should not pack to 'lib'. Instead, we choose 'tasks' by convention. -->
     <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
     <!-- NuGet does validation that libraries in a package are exposed as dependencies, but we _explicitly_ do not want that behavior for MSBuild tasks. They are isolated by design. Therefore we ignore this specific warning. -->
@@ -38,7 +43,16 @@
     <RepositoryUrl>https://github.com/JanProvaznik/MSBuildWasm</RepositoryUrl>
     <PackageTags>MSBuild;Wasm;WebAssembly</PackageTags>
     <PackageLicenseFile>LICENSE</PackageLicenseFile>
+
   </PropertyGroup>
+
+  <!-- This is the target we defined above. It's purpose is to add all of our PackageReference and ProjectReference's runtime assets to our package output.  -->
+  <Target Name="CopyProjectReferencesToPackage" DependsOnTargets="ResolveReferences">
+    <ItemGroup>
+        <!-- The TargetPath is the path inside the package that the source file will be placed. This is already precomputed in the ReferenceCopyLocalPaths items' DestinationSubPath, so reuse it here. -->
+        <BuildOutputInPackage Include="@(ReferenceCopyLocalPaths)" TargetPath="%(ReferenceCopyLocalPaths.DestinationSubPath)" />
+    </ItemGroup>
+  </Target>
 
   <Target
         Name="AddBuildDependencyFileToBuiltProjectOutputGroupOutput"
@@ -52,15 +66,9 @@
             FinalOutputPath="$(ProjectDepsFilePath)" />
     </ItemGroup>
 </Target>
-<Target Name="IncludeWasmLibs" BeforeTargets="_GetPackageFiles">
+  
   <ItemGroup>
-    <_WasmRuntimeFiles Include="$(PkgWasmtime)\runtimes\**\*.*"/>
-    <_PackageFiles Include="@(_WasmRuntimeFiles)" Pack="true" PackagePath="tasks\$(TargetFramework)\runtimes\%(_WasmRuntimeFiles.RecursiveDir)%(_WasmRuntimeFiles.Filename)%(_WasmRuntimeFiles.Extension)" />
-  </ItemGroup>
-</Target>
-
-  <ItemGroup>
-    <PackageReference
+    <PackageReference 
       Include="Microsoft.Build"
       Version="17.10.4"
       PrivateAssets="all"
@@ -69,31 +77,59 @@
     />
     <PackageReference
       Include="Microsoft.Build.Tasks.Core"
-      Version="17.10.4"
+      Version="17.10.4" 
       PrivateAssets="all"
       ExcludeAssets="Runtime"
 
     />
     <PackageReference
       Include="Microsoft.Build.Utilities.Core"
-      Version="17.10.4"
+      Version="17.10.4" 
       PrivateAssets="all"
       ExcludeAssets="Runtime"
 
     />
     <PackageReference
       Include="Microsoft.Build.Framework"
-      Version="17.10.4"
+      Version="17.10.4" 
       PrivateAssets="all"
       ExcludeAssets="Runtime"
 
     />
-    <PackageReference
-      GeneratePathProperty="true"
+    <PackageReference 
       Include="Wasmtime"
       Version="22.0.0"
       PrivateAssets="all"
     />
+  </ItemGroup>
+  
+  <!-- without this it packages always only the windows one, it is a hack, weird that it is not copying all -->
+  <ItemGroup>
+    <Content Include="bin\Release\net8.0\runtimes\linux-arm64\native\libwasmtime.so">
+      <Pack>true</Pack>
+      <PackagePath>tasks/net8.0/runtimes/linux-arm64/native/</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="bin\Release\net8.0\runtimes\linux-x64\native\libwasmtime.so">
+      <Pack>true</Pack>
+      <PackagePath>tasks/net8.0/runtimes/linux-x64/native/</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="bin\Release\net8.0\runtimes\osx-arm64\native\libwasmtime.dylib">
+      <Pack>true</Pack>
+      <PackagePath>tasks/net8.0/runtimes/osx-arm64/native/</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="bin\Release\net8.0\runtimes\osx-x64\native\libwasmtime.dylib">
+      <Pack>true</Pack>
+      <PackagePath>tasks/net8.0/runtimes/osx-x64/native/</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="bin\Release\net8.0\runtimes\win-x64\native\wasmtime.dll">
+      <Pack>true</Pack>
+      <PackagePath>tasks/net8.0/runtimes/win-x64/native/</PackagePath>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <None Include="..\LICENSE">
