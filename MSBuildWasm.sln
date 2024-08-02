@@ -9,7 +9,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExampleProject", "examples\
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "WasmTasksTests", "test\WasmTasksTests\WasmTasksTests.csproj", "{94FE5153-34D6-4F93-9792-7408AD89945D}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RustWasmTaskTemplate", "templates\RustWasmTask\RustWasmTaskTemplate.csproj", "{68ECCF1E-A1B7-44AE-9B61-D12399B1F739}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RustWasmTaskTemplate", "templates\RustWasmTaskTemplate\RustWasmTaskTemplate.csproj", "{68ECCF1E-A1B7-44AE-9B61-D12399B1F739}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
