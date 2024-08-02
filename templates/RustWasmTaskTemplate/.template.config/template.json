@@ -3,7 +3,6 @@
   "author": "Jan Provaznik",
   "classifications": [ "Wasm", "Rust", "MSBuild"],
   "description": "Rust template for a WebAssembly MSBuild task.",
-  "groupidentity": "Avalonia.App",
   "identity": "MSBuildWasm.RustTask",
   "name": "Rust WebAssembly MSBuild Task",
   "preferNameDirectory": true,

@@ -19,12 +19,14 @@
   <PropertyGroup>
     <IsPackable>true</IsPackable>
     <PackageId>MSBuildWasm</PackageId>
-    <Version>0.1.0</Version>
+    <Version>0.1.0-alpha</Version>
     <Authors>Jan Provaznik</Authors>
     <Company>Microsoft</Company>
+
     <TargetsForTfmSpecificBuildOutput>
       $(TargetsForTfmSpecificBuildOutput);_CopyManagedDependenciesToPackage
   </TargetsForTfmSpecificBuildOutput>
+    
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <!-- This property tells MSBuild where the root folder of the package's build assets should be. Because we are not a library package, we should not pack to 'lib'. Instead, we choose 'tasks' by convention. -->
     <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
@@ -101,6 +103,7 @@
 
     />
     <PackageReference
+
       GeneratePathProperty="true"
       Include="Wasmtime"
       Version="22.0.0"
@@ -108,8 +111,13 @@
     />
 
   </ItemGroup>
+
   <ItemGroup>
     <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\THIRDPARTYNOTICES.txt">
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>

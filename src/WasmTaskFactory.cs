@@ -15,7 +15,8 @@ namespace MSBuildWasm
     /// </summary>
     public class WasmTaskFactory : ITaskFactory2
     {
-        public string FactoryName => "WasmTaskFactory";
+        // TODO avoid hardcoded when possible
+        public string FactoryName => nameof(WasmTaskFactory);
         private TaskPropertyInfo[] _taskProperties;
         private TaskLoggingHelper _log;
         private string _taskName;
@@ -168,7 +169,6 @@ namespace MSBuildWasm
                 {
                     propertyBuilder.SetCustomAttribute(new CustomAttributeBuilder(typeof(RequiredAttribute).GetConstructor(Type.EmptyTypes), []));
                 }
-
             }
             private static void DefineProperty(TypeBuilder typeBuilder, TaskPropertyInfo prop)
             {
