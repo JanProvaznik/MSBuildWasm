@@ -11,6 +11,7 @@ using Wasmtime;
 
 namespace MSBuildWasm
 {
+    // Add documentation
     public abstract class WasmTask : Microsoft.Build.Utilities.Task, IWasmTask
     {
         const string ExecuteFunctionName = "Execute";
@@ -227,6 +228,7 @@ namespace MSBuildWasm
             }
         }
 
+        // TODO does sandboxing belong here?
         private void CopyPropertyToTmp(PropertyInfo property)
         {
             object value = property.GetValue(this);
@@ -244,6 +246,7 @@ namespace MSBuildWasm
             }
         }
 
+        // TODO does it belong here? + the rest of json-related logic
         private string CreateTaskInputJSON()
         {
             var sb = new StringBuilder();

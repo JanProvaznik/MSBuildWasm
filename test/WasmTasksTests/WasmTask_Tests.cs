@@ -126,7 +126,7 @@ namespace WasmTasksTests
             Directory.GetFiles(outputDir).Length.ShouldBe(5);
 
 
-
+            // TODO formatting
 
             // cleanup
             Directory.Delete(inputPath1,true);
