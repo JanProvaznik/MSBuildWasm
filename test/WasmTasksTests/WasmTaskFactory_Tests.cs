@@ -19,7 +19,7 @@ namespace WasmTasksTests
             TaskPropertyInfo[] properties = Array.Empty<TaskPropertyInfo>();
 
             Type resultType = WasmTaskReflectionBuilder.BuildTaskType(taskName, properties);
-            ITask task = Activator.CreateInstance(resultType) as ITask;
+            ITask? task = Activator.CreateInstance(resultType) as ITask;
 
             Assert.Equal(taskName, resultType.Name);
             Assert.Equal(typeof(WasmTask), resultType.BaseType);
@@ -50,7 +50,7 @@ namespace WasmTasksTests
             Assert.NotNull(resultType.GetProperty(prop1name));
             Assert.Null(resultType.GetProperty(prop2name));
         }
-
+        // split/theory
         [Fact]
         public void BuildTaskType_CreatesTypeWithCorrectAttributes()
         {
@@ -60,7 +60,7 @@ namespace WasmTasksTests
             const string prop2name = "p2";
             TaskPropertyInfo[] properties = new[]
             {
-                new TaskPropertyInfo(prop1name, typeof(string), true, false),
+                new TaskPropertyInfo(prop1name, typeof(string), output: true, required: false),
                 new TaskPropertyInfo(prop2name, typeof(bool), false, true)
             };
 
@@ -68,16 +68,15 @@ namespace WasmTasksTests
             Type resultType = WasmTaskReflectionBuilder.BuildTaskType(taskName, properties);
 
             // Assert
-            Assert.NotNull(resultType.GetProperty(prop1name).GetCustomAttribute<OutputAttribute>());
-            Assert.Null(resultType.GetProperty(prop1name).GetCustomAttribute<RequiredAttribute>());
-            Assert.NotNull(resultType.GetProperty(prop2name).GetCustomAttribute<RequiredAttribute>());
-            Assert.Null(resultType.GetProperty(prop2name).GetCustomAttribute<OutputAttribute>());
+            Assert.NotNull(resultType.GetProperty(prop1name)!.GetCustomAttribute<OutputAttribute>());
+            Assert.Null(resultType.GetProperty(prop1name)!.GetCustomAttribute<RequiredAttribute>());
+            Assert.NotNull(resultType.GetProperty(prop2name)!.GetCustomAttribute<RequiredAttribute>());
+            Assert.Null(resultType.GetProperty(prop2name)!.GetCustomAttribute<OutputAttribute>());
         }
         [Fact]
         public void ConvertJsonTaskInfoToProperties_ShouldParseProperties()
         {
-            string taskInfoJson = "{ \"Properties\": { \"Dirs\": { \"type\": \"ITaskItem[]\", \"required\": true, \"output\": false }, \"MergedDir\": { \"type\": \"ITaskItem\", \"required\": false, \"output\": true }, \"MergedName\": { \"type\": \"string\", \"required\": false, \"output\": false } } }";
-            TaskPropertyInfo[] propsParsed = Serializer.ConvertJsonTaskInfoToProperties(taskInfoJson);
+            string taskInfoJson = "{ \"properties\": [  {\"name\":\"Dirs\", \"property_type\": \"ITaskItemArray\", \"required\": true, \"output\": false }, {\"name\":\"MergedDir\", \"property_type\": \"ITaskItem\", \"required\": false, \"output\": true }, {\"name\":\"MergedName\", \"property_type\": \"string\", \"required\": false, \"output\": false } ] }";
             TaskPropertyInfo[] propsExpected = new TaskPropertyInfo[]
             {
                 new TaskPropertyInfo("Dirs", typeof(ITaskItem[]), false, true),
@@ -85,39 +84,67 @@ namespace WasmTasksTests
                 new TaskPropertyInfo("MergedName", typeof(string), false, false)
             };
 
+
+            TaskPropertyInfo[] propsParsed = Serializer.ConvertTaskInfoJsonToProperties(taskInfoJson);
+
             propsExpected.ShouldBeEquivalentTo(propsParsed);
         }
+
+        // the task returns undeserializable json, should error
+        //[Fact]
+        //public void GetTaskInfo_InvalidJson_ShouldError()
+        //{
+        //    const string invalidJson = "{ \"Properties\": { \"Dirs\": { \"type\": \"ITaskItem[]\", \"required\": true, \"output\": false }, \"MergedDir\": { \"type\": \"ITaskItem\", \"required\": false, \"output\": true }, \"MergedName\": { \"type\": \"string\", \"required\": false, \"output\": false } ";
+
+        //    WasmTaskFactory factory = new WasmTaskFactory();
+
+        //    factory.OnTaskInfoReceived(null, invalidJson);
+
+
+
+
+
+        //}
+
+        // it's a module without exports!
+
+        // it's a component
+
+        // did not provide taskInfo during initialization
+
+        // no params (ok)
+
 
 
 
         // [Fact]
-        public void E2E_Template()
-        {
-            const string pathToWasmDLL = @"";
-            const string taskPath = @"";
-            const string pathToMSBuild = @"";
+        //        public void E2E_Template()
+        //        {
+        //            const string pathToWasmDLL = @"";
+        //            const string taskPath = @"";
+        //            const string pathToMSBuild = @"";
 
-            using (TestEnvironment env = TestEnvironment.Create())
-            {
-                TransientTestFolder folder = env.CreateFolder(createFolder: true);
-                string location = Assembly.GetExecutingAssembly().Location;
-                TransientTestFile inlineTask = env.CreateFile(folder, "5107.proj", @$"
-<Project>
+        //            using (TestEnvironment env = TestEnvironment.Create())
+        //            {
+        //                TransientTestFolder folder = env.CreateFolder(createFolder: true);
+        //                string location = Assembly.GetExecutingAssembly().Location;
+        //                TransientTestFile inlineTask = env.CreateFile(folder, "5107.proj", @$"
+        //<Project>
 
-  <UsingTask TaskName=""MyNewFancyTask"" AssemblyFile=""{pathToWasmDLL}"" TaskFactory=""WasmTaskFactory"">
-    <Task>{taskPath}</Task>
-  </UsingTask>
+        //  <UsingTask TaskName=""MyNewFancyTask"" AssemblyFile=""{pathToWasmDLL}"" TaskFactory=""WasmTaskFactory"">
+        //    <Task>{taskPath}</Task>
+        //  </UsingTask>
 
-<Target Name=""ToRun"">
-  <MyNewFancyTask/>
-</Target>
+        //<Target Name=""ToRun"">
+        //  <MyNewFancyTask/>
+        //</Target>
 
-</Project>
-");
-                // Run MSBuild and assert it's successful
-                // TODO
-            }
-        }
+        //</Project>
+        //");
+        //                // Run MSBuild and assert it's successful
+        //                // TODO
+        //            }
+        //        }
 
     }
 }

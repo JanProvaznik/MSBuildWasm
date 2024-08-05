@@ -1,84 +1,83 @@
-use std::ffi::CString;
-use std::os::raw::c_char;
+mod msbuild;
+use msbuild::logging::{log_warning};
+use msbuild::task_info::{task_info, Property, PropertyType, TaskInfoStruct, TaskResult};
+use serde::{Serialize, Deserialize};
 
-#[repr(C)] #[allow(dead_code)]
-pub enum MessageImportance {
-    High,
-    Normal,
-    Low
-}
 
-#[repr(C)] #[allow(dead_code)]
-pub enum TaskResult {
-    Success,  
-    Failure 
-}
-
-// Import logging as functions from the host environment
-#[link(wasm_import_module = "msbuild-log")] #[allow(dead_code)]
-extern "C" {
-    fn LogError(message: *const c_char, message_length: usize);
-    fn LogWarning(message: *const c_char, message_legth: usize);  
-    fn LogMessage(messageImportance: MessageImportance, message: *const c_char, message_length: usize);
-}
-
-#[allow(dead_code)]
-fn log_message(messageImportance: MessageImportance, message: &str) {
-    let c_message = CString::new(message).unwrap();
-    unsafe {
-        LogMessage(messageImportance, c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-#[allow(dead_code)]
-fn log_error(message: &str) {
-    let c_message = CString::new(message).unwrap();
-    unsafe {
-        LogError(c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-#[allow(dead_code)]
-fn log_warning(message: &str) {
-    let c_message = CString::new(message).unwrap();
-    unsafe {
-        LogWarning(c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-
-#[link(wasm_import_module = "msbuild-taskinfo")]
-extern "C" {
-    fn TaskInfo(task_info_json: *const c_char, task_info_length: usize); // this is a ptr to a json string
-}
-
-fn task_info(task_info_json: &str) {
-    let c_message = CString::new(task_info_json).unwrap();
-    unsafe {
-        TaskInfo(c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-
+/// Entry point for the task. It receives input properties from stdin and writes output properties to stdout
+/// input should be in the form of a JSON {properties:{"name":"value", ...}}. 
+/// output should be in the form of a JSON {properties:{"name":"value", ...}}.
 #[no_mangle] #[allow(non_snake_case)]
 pub fn Execute() -> TaskResult
 {
         // Task input properties in stdin
         let mut input = String::new();
         std::io::stdin().read_line(&mut input).unwrap();
-
         
-        // log_error("Error message from Wasm"); // we don't want the template task failing
+        // check msbuild::logging provides logging messages, warnings and errors
         // show what the template task got on input
         log_warning(&input);
-        log_message(MessageImportance::High, "High priority message from Wasm");
-        log_message(MessageImportance::Normal, "Normal priority message from Wasm");
-        log_message(MessageImportance::Low, "Low priority message from Wasm");
         
-        
-        println!("{}",r#"{"TestOutputProperty":"This is the output property value from WASM task"}"#);
+
+        // println!("{}",r#"{"TestOutputProperty":"This is the output property value from WASM task"}"#);
+        // with serde
+        let output_struct = OutputStruct {
+            properties: OutputProperties {
+                TestOutputProperty: String::from("This is the output property value from WASM task"),
+            },
+        };
+        println!("{}", serde_json::to_string(&output_struct).unwrap());
+
 
         return TaskResult::Success;
 }
 
+/// Rust wasm task implementation exports GetTaskInfo which is called by the host environment to get the task info
+/// use the TaskInfoStruct to define the task's properties.
 #[no_mangle] #[allow(non_snake_case)]
 pub fn GetTaskInfo() 
 {
-    task_info(r#"{"Properties":{"TestNormalProperty":{"type":"string","required":false,"output":false},"TestOutputProperty":{"type":"string","required":false,"output":true},"TestRequiredProperty":{"type":"string","required":true,"output":false},"TestBoolProperty":{"type":"bool","required":false,"output":false}}}"#);
+    let task_info_struct = TaskInfoStruct {
+        name: String::from("template"),
+        properties: vec![
+            Property {
+                name: String::from("TestNormalProperty"),
+                output: false,
+                required: false,
+                property_type: PropertyType::String,
+            },
+            Property {
+                name: String::from("TestOutputProperty"),
+                output: true,
+                required: false,
+                property_type: PropertyType::String,
+            },
+            Property {
+                name: String::from("TestRequiredProperty"),
+                output: false,
+                required: true,
+                property_type: PropertyType::String,
+            },
+            Property {
+                name: String::from("TestBoolProperty"),
+                output: false,
+                required: false,
+                property_type: PropertyType::Bool,
+            },
+        ],
+    };
+    task_info(task_info_struct);
+}
+
+/// Example Output Struct with Properties,
+/// implement according to your task's output properties,
+/// if a property is of type `ITaskItem`` it should be a dictionary
+#[derive(Debug, Serialize, Deserialize)] #[allow(non_snake_case)]
+struct OutputProperties {
+    TestOutputProperty: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OutputStruct {
+    properties: OutputProperties,
 }

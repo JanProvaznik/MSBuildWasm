@@ -1,106 +1,118 @@
-use std::ffi::CString;
-use std::path::Path;
-use std::os::raw::c_char;
+mod msbuild;
+use msbuild::logging::{log_warning, log_error};
+use msbuild::task_info::{task_info, Property, PropertyType, TaskInfoStruct, TaskResult};
+use serde::{Serialize, Deserialize};
+use serde_json::Value;
 use std::fs;
 use std::io;
-use serde_json::Value;
-use serde::Deserialize;
+use std::path::Path;
 
-#[repr(C)] #[allow(dead_code)]
-pub enum MessageImportance {
-    High,
-    Normal,
-    Low,
-}
-
-#[repr(C)] #[allow(dead_code)]
-pub enum TaskResult {
-    Success,  
-    Failure,
-}
-
-// Import logging as functions from the host environment
-#[link(wasm_import_module = "msbuild-log")] #[allow(dead_code)]
-extern "C" {
-    fn LogError(message: *const c_char, message_length: usize);
-    fn LogWarning(message: *const c_char, message_legth: usize);  
-    fn LogMessage(messageImportance: MessageImportance, message: *const c_char, message_length: usize);
-}
-
-#[allow(dead_code)]
-fn log_message(messageImportance: MessageImportance, message: &str) {
-    let c_message = CString::new(message).unwrap();
-    unsafe {
-        LogMessage(messageImportance, c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-#[allow(dead_code)]
-fn log_error(message: &str) {
-    let c_message = CString::new(message).unwrap();
-    unsafe {
-        LogError(c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-#[allow(dead_code)]
-fn log_warning(message: &str) {
-    let c_message = CString::new(message).unwrap();
-    unsafe {
-        LogWarning(c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-
-#[link(wasm_import_module = "msbuild-taskinfo")]
-extern "C" {
-    fn TaskInfo(task_info_json: *const c_char, task_info_length: usize); // this is a ptr to a json string
-}
-
-fn task_info(task_info_json: &str) {
-    let c_message = CString::new(task_info_json).unwrap();
-    unsafe {
-        TaskInfo(c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-
-#[derive(serde::Deserialize)]
-struct Properties {
-    Dirs: Vec<Value>,
-}
-
-#[derive(serde::Deserialize)]
-struct TaskInput {
-    Properties: Properties,
-}
-
-#[no_mangle]
-#[allow(non_snake_case)]
+/// Entry point for the task. It receives input properties from stdin and writes output properties to stdout
+/// input should be in the form of a JSON {properties:{"name":"value", ...}}. 
+/// output should be in the form of a JSON {properties:{"name":"value", ...}}.
+#[no_mangle] #[allow(non_snake_case)]
 pub fn Execute() -> TaskResult {
     // Task input properties in stdin
     let mut input = String::new();
     std::io::stdin().read_line(&mut input).unwrap();
-    let taskInput: TaskInput = serde_json::from_str(&input).unwrap();
+    
+    // Deserialize task input
+    let task_input: TaskInput = match serde_json::from_str(&input) {
+        Ok(input) => input,
+        Err(_) => {
+            log_error("Failed to parse task input.");
+            return TaskResult::Failure;
+        }
+    };
 
-    let wasm_paths: Vec<String> = taskInput 
-        .Properties
+    let wasm_paths: Vec<String> = task_input
+        .properties
         .Dirs
         .iter()
         .filter_map(|dir| dir.get("WasmPath"))
         .filter_map(|wasm_path| wasm_path.as_str())
         .map(|s| s.to_string())
         .collect();
-    merge_directories(&wasm_paths, "output_dir").unwrap();
+
+    let output_name = task_input.properties.MergedName.unwrap_or("output_dir".to_string());
+    
+    if let Err(err) = merge_directories(&wasm_paths, &output_name) {
+        log_error(&format!("Failed to merge directories: {}", err));
+        return TaskResult::Failure;
+    }
 
     for path in wasm_paths {
         log_warning(&format!("WasmPath: {}", path));
     }
 
-    println!("{}", r#"{"MergedDir":{"ItemSpec":"output_dir","WasmPath":"output_dir"}}"#);
-    return TaskResult::Success;
+    let output_struct = OutputStruct {
+        properties: OutputProperties {
+            MergedDir: MergedDirStruct {
+                ItemSpec: output_name.to_string(),
+                WasmPath: output_name.to_string(),
+            },
+        }
+    };
+
+    println!("{}", serde_json::to_string(&output_struct).unwrap());
+
+    TaskResult::Success
 }
 
-#[no_mangle]
-#[allow(non_snake_case)]
+/// Rust wasm task implementation exports GetTaskInfo which is called by the host environment to get the task info
+/// use the TaskInfoStruct to define the task's properties.
+#[no_mangle] #[allow(non_snake_case)]
 pub fn GetTaskInfo() {
-    task_info(r#"{"Properties":{"Dirs":{"type":"ITaskItem[]","required":true,"output":false},"MergedDir":{"type":"ITaskItem","required":false,"output":true},"MergedName":{"type":"string","required":false,"output":false}}}"#);
+    let task_info_struct = TaskInfoStruct {
+        name: String::from("MergeDirectoriesTask"),
+        properties: vec![
+            Property {
+                name: String::from("Dirs"),
+                output: false,
+                required: true,
+                property_type: PropertyType::ITaskItemArray,
+            },
+            Property {
+                name: String::from("MergedName"),
+                output: false,
+                required: false,
+                property_type: PropertyType::String,
+            },
+            Property {
+                name: String::from("MergedDir"),
+                output: true,
+                required: false,
+                property_type: PropertyType::ITaskItem,
+            },
+        ],
+    };
+    task_info(task_info_struct);
+}
+
+#[derive(Debug, Serialize, Deserialize)] #[allow(non_snake_case)]
+struct MergedDirStruct {
+    ItemSpec: String,
+    WasmPath: String,
+}
+#[derive(Debug, Serialize, Deserialize)] #[allow(non_snake_case)]
+struct OutputProperties {
+    MergedDir: MergedDirStruct,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OutputStruct {
+    properties: OutputProperties,
+}
+
+#[derive(Debug, Deserialize)] #[allow(non_snake_case)]
+struct Properties {
+    Dirs: Vec<Value>,
+    MergedName: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct TaskInput {
+    properties: Properties,
 }
 
 fn merge_directories(paths: &[String], output_name: &str) -> io::Result<()> {

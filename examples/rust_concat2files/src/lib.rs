@@ -1,101 +1,103 @@
-use std::ffi::CString;
-use std::os::raw::c_char;
+mod msbuild;
+// use msbuild::logging::{log_warning, log_error, log_message};
+use msbuild::task_info::{task_info, Property, PropertyType, TaskInfoStruct, TaskResult};
+use serde::{Serialize, Deserialize};
 
-#[repr(C)] #[allow(dead_code)]
-pub enum MessageImportance {
-    High,
-    Normal,
-    Low
-}
-
-#[repr(C)] #[allow(dead_code)]
-pub enum TaskResult {
-    Success,  
-    Failure 
-}
-
-// Import logging as functions from the host environment
-#[link(wasm_import_module = "msbuild-log")] #[allow(dead_code)]
-extern "C" {
-    fn LogError(message: *const c_char, message_length: usize);
-    fn LogWarning(message: *const c_char, message_legth: usize);  
-    fn LogMessage(messageImportance: MessageImportance, message: *const c_char, message_length: usize);
-}
-
-#[allow(dead_code)]
-fn log_message(messageImportance: MessageImportance, message: &str) {
-    let c_message = CString::new(message).unwrap();
-    unsafe {
-        LogMessage(messageImportance, c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-#[allow(dead_code)]
-fn log_error(message: &str) {
-    let c_message = CString::new(message).unwrap();
-    unsafe {
-        LogError(c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-#[allow(dead_code)]
-fn log_warning(message: &str) {
-    let c_message = CString::new(message).unwrap();
-    unsafe {
-        LogWarning(c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-
-#[link(wasm_import_module = "msbuild-taskinfo")]
-extern "C" {
-    fn TaskInfo(task_info_json: *const c_char, task_info_length: usize); // this is a ptr to a json string
-}
-
-fn task_info(task_info_json: &str) {
-    let c_message = CString::new(task_info_json).unwrap();
-    unsafe {
-        TaskInfo(c_message.as_ptr(), c_message.to_bytes().len());
-    }
-}
-
-
-
+/// Entry point for the task. It receives input properties from stdin and writes output properties to stdout.
+/// Input should be in the form of a JSON {properties:{"name":"value", ...}}. 
+/// Output should be in the form of a JSON {properties:{"name":"value", ...}}.
 #[no_mangle] #[allow(non_snake_case)]
 pub fn Execute() -> TaskResult
 {
-        // Task input properties in stdin
-        // the input will be in the form {"Properties:{InputFile1:{Path:"..."},InputFile2:{Path:"..."},OutputFile:{Path:"..."}}}
-        let mut input = String::new();
-        std::io::stdin().read_line(&mut input).unwrap();
+    // Task input properties in stdin
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input).unwrap();
 
-        
-        // this is not nice rust code, it lacks error handling
-        let input_json: serde_json::Value = serde_json::from_str(&input).unwrap();
+    // Deserialize the input JSON to access properties
+    let input_json: serde_json::Value = serde_json::from_str(&input).unwrap();
+    // Extract the input file paths from the JSON
+    let input_file1 = input_json["properties"]["InputFile1"]["WasmPath"].as_str().unwrap();
+    let input_file2 = input_json["properties"]["InputFile2"]["WasmPath"].as_str().unwrap();
+    // Extract the output file path from the JSON but if it does not exist then use a default value wasmconcatoutput.txt
+    let output_file = input_json["properties"]["OutputName"].as_str().unwrap_or("wasmconcatoutput.txt");
 
-        let warning_message= CString::new(input).unwrap();
-        unsafe
-        {
-            LogWarning(warning_message.as_ptr(), warning_message.to_bytes().len());
-        }
+    // Read the contents of the input files
+    let input_file1_contents = std::fs::read_to_string(input_file1).unwrap();
+    let input_file2_contents = std::fs::read_to_string(input_file2).unwrap();
 
-        // we will parse out the paths from the input string
-        let input_file1 = input_json["Properties"]["InputFile1"]["WasmPath"].as_str().unwrap();
-        let input_file2 = input_json["Properties"]["InputFile2"]["WasmPath"].as_str().unwrap();
-        
-        // read the contents of the input files
-        let input_file1_contents = std::fs::read_to_string(input_file1).unwrap();
-        let input_file2_contents = std::fs::read_to_string(input_file2).unwrap();
+    // Concatenate the contents
+    let output_contents = format!("{}{}", input_file1_contents, input_file2_contents);
 
-         // concat
-        let output_contents = format!("{}{}", input_file1_contents, input_file2_contents);
-         // write to output file
-        std::fs::write("wasmconcatoutput.txt", output_contents).unwrap();
-        let out_json_str = r#"{"OutputFile":{"ItemSpec":"wasmconcatoutput.txt","WasmPath":"wasmconcatoutput.txt"}}"#;
-        println!("{}", out_json_str);
+    // Write to output file
+    std::fs::write(output_file, output_contents).unwrap();
 
-        return TaskResult::Success;
+    // Prepare output properties and log the result
+    let output_properties = OutputProperties {
+        OutputFile: OutputFile {
+            ItemSpec: output_file.to_string(),
+            WasmPath: output_file.to_string(),
+        },
+    };
+
+    let output_struct = OutputStruct {
+        properties: output_properties,
+    };
+
+    // Print the output properties as JSON
+    println!("{}", serde_json::to_string(&output_struct).unwrap());
+
+    TaskResult::Success
 }
 
+/// Rust wasm task implementation exports GetTaskInfo which is called by the host environment to get the task info.
+/// Use the TaskInfoStruct to define the task's properties.
 #[no_mangle] #[allow(non_snake_case)]
 pub fn GetTaskInfo() 
 {
-    task_info(r#"{"Properties":{"InputFile1":{"type":"ITaskItem","required":true,"output":false},"InputFile2":{"type":"ITaskItem","required":true,"output":false},"OutputFile":{"type":"ITaskItem","required":false,"output":true}}}"#);
+    let task_info_struct = TaskInfoStruct {
+        name: String::from("concat2files"),
+        properties: vec![
+            Property {
+                name: String::from("InputFile1"),
+                output: false,
+                required: true,
+                property_type: PropertyType::ITaskItem,
+            },
+            Property {
+                name: String::from("InputFile2"),
+                output: false,
+                required: true,
+                property_type: PropertyType::ITaskItem,
+            },
+            Property {
+                name: String::from("OutputName"),
+                output: false,
+                required: false,
+                property_type: PropertyType::String,
+            },
+            Property {
+                name: String::from("OutputFile"),
+                output: true,
+                required: false,
+                property_type: PropertyType::ITaskItem,
+            },
+        ],
+    };
+    task_info(task_info_struct);
+}
+
+#[derive(Debug, Serialize, Deserialize)] #[allow(non_snake_case)]
+struct OutputFile {
+    ItemSpec: String,
+    WasmPath: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)] #[allow(non_snake_case)]
+struct OutputProperties {
+    OutputFile: OutputFile,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+struct OutputStruct {
+    properties: OutputProperties,
 }

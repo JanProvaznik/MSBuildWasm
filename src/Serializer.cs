@@ -1,15 +1,9 @@
 ﻿// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using Microsoft.Build.Framework;
-using Microsoft.Build.Utilities;
 
 namespace MSBuildWasm
 {
@@ -65,39 +59,54 @@ namespace MSBuildWasm
         {
             return JsonSerializer.Serialize(directories.Select(d => d.ItemSpec).ToArray());
         }
-        private static TaskPropertyInfo ExtractPropertyInfo(JsonProperty jsonProperty)
+        private static TaskPropertyInfo ExtractPropertyInfo(JsonElement jsonProperty) =>
+            new TaskPropertyInfo(
+                jsonProperty.GetProperty("name").GetString(),
+                ConvertStringToType(jsonProperty.GetProperty("property_type").GetString()),
+                jsonProperty.GetProperty("output").GetBoolean(),
+                jsonProperty.GetProperty("required").GetBoolean()
+            );
+
+        public enum PropertyType
         {
-            string name = jsonProperty.Name;
-            JsonElement value = jsonProperty.Value;
-
-            string type = value.GetProperty("type").GetString();
-            bool required = value.GetProperty("required").GetBoolean();
-            bool output = value.GetProperty("output").GetBoolean();
-
-            Type propertyType = ConvertStringToType(type);
-            return new TaskPropertyInfo(name, propertyType, output, required);
+            String,
+            Bool,
+            ITaskItem,
+            ITaskItemArray,
+            StringArray,
+            BoolArray,
         }
-        private static Type ConvertStringToType(string type) => type switch
+
+        public static Type ConvertStringToType(string type)
         {
-            "string" => typeof(string),
-            "bool" => typeof(bool),
-            "ITaskItem" => typeof(ITaskItem),
-            "string[]" => typeof(string[]),
-            "bool[]" => typeof(bool[]),
-            "ITaskItem[]" => typeof(ITaskItem[]),
-            _ => throw new ArgumentException($"Unsupported transfer type: {type}")
-        };
+            if (!Enum.TryParse(type, true, out PropertyType propertyType))
+            {
+                throw new ArgumentException($"Unsupported property type: {type}");
+            }
+
+            return propertyType switch
+            {
+                PropertyType.String => typeof(string),
+                PropertyType.Bool => typeof(bool),
+                PropertyType.ITaskItem => typeof(ITaskItem),
+                PropertyType.StringArray => typeof(string[]),
+                PropertyType.BoolArray => typeof(bool[]),
+                PropertyType.ITaskItemArray => typeof(ITaskItem[]),
+                _ => throw new ArgumentException($"Unsupported transfer type: {type}")
+            };
+        }
+
         /// <param name="json">Task Info JSON</param>
         /// <returns>List of the property infos to create in the task type.</returns>
-        public static TaskPropertyInfo[] ConvertJsonTaskInfoToProperties(string json)
+        public static TaskPropertyInfo[] ConvertTaskInfoJsonToProperties(string json)
         {
             List<TaskPropertyInfo> taskPropertyInfos = [];
             using JsonDocument document = JsonDocument.Parse(json);
             JsonElement root = document.RootElement;
 
-            if (root.TryGetProperty("Properties", out JsonElement properties))
+            if (root.TryGetProperty("properties", out JsonElement properties))
             {
-                foreach (JsonProperty jsonProperty in properties.EnumerateObject())
+                foreach (JsonElement jsonProperty in properties.EnumerateArray())
                 {
                     taskPropertyInfos.Add(ExtractPropertyInfo(jsonProperty));
                 }

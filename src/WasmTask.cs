@@ -250,9 +250,9 @@ namespace MSBuildWasm
         private string CreateTaskInputJSON()
         {
             var sb = new StringBuilder();
-            sb.Append("{\"Properties\":");
+            sb.Append("{\"properties\":");
             sb.Append(Serializer.SerializeProperties(this, _nonInputPropertyNames));
-            sb.Append(",\"Directories\":");
+            sb.Append(",\"directories\":");
             sb.Append(Serializer.SerializeDirectories(Directories));
             sb.Append('}');
 
@@ -354,7 +354,8 @@ namespace MSBuildWasm
                 PropertyInfo[] classProperties = GetType().GetProperties();
 
                 // Iterate through all properties in the JSON
-                foreach (JsonProperty jsonProperty in root.EnumerateObject())
+                JsonElement properties = root.GetProperty("properties");
+                foreach (JsonProperty jsonProperty in properties.EnumerateObject())
                 {
                     ReflectJsonPropertyToClassProperty(classProperties, jsonProperty);
                 }

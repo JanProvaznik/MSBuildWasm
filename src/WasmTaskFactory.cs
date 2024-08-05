@@ -19,6 +19,7 @@ namespace MSBuildWasm
         public string FactoryName => nameof(WasmTaskFactory);
         private TaskPropertyInfo[] _taskProperties;
         private TaskLoggingHelper _log;
+        private bool _taskInfoReceived = false;
         private string _taskName;
         private string _taskPath;
         public event TaskInfoEventHandler TaskInfoEvent;
@@ -51,7 +52,7 @@ namespace MSBuildWasm
             _taskName = taskName;
             _taskPath = Path.GetFullPath(taskBody);
 
-            GetCustomWasmTaskProperties();
+            GetCustomWasmTaskProperties(); // side effect: sets _taskProperties
             TaskType = WasmTaskReflectionBuilder.BuildTaskType(taskName, _taskProperties);
 
             return true;
@@ -65,7 +66,7 @@ namespace MSBuildWasm
 
 
         /// <summary>
-        /// Gets the properties of the Task from the WebAssembly module.
+        /// Gets the properties of the Task from the WebAssembly module and sets them as a class field.
         /// </summary>
         private void GetCustomWasmTaskProperties()
         {
@@ -79,6 +80,7 @@ namespace MSBuildWasm
                 linker.LinkLogFunctions(store);
                 linker.LinkTaskInfo(store, TaskInfoEvent);
                 Instance instance = linker.Instantiate(store, module);
+                // WASIp2: get structured info from GetTaskInfo function return value
                 Action getTaskInfo = instance.GetAction("GetTaskInfo");
                 if (getTaskInfo == null)
                 {
@@ -92,23 +94,35 @@ namespace MSBuildWasm
             {
                 _log.LogErrorFromException(ex, true);
             }
+            if (!_taskInfoReceived)
+            {
+                _log.LogError("Task info was not received from the WebAssembly module.");
+            }
         }
 
-
+        /// <summary>
+        /// Handling callback with Task Info JSON.
+        /// </summary>
+        /// <remarks>WASIp2: get structured info from GetTaskInfo function output and parse it via classes from wit-bindgen and convert them to properties, this event scheme unnecessary</remarks>
         private void OnTaskInfoReceived(object sender, string taskInfoJson)
         {
             try
             {
-                _taskProperties = Serializer.ConvertJsonTaskInfoToProperties(taskInfoJson);
+                _taskProperties = Serializer.ConvertTaskInfoJsonToProperties(taskInfoJson);
             }
-            catch (Exception ex) when (ex is JsonException || ex is KeyNotFoundException)
+            catch (Exception ex) when (ex is JsonException || ex is KeyNotFoundException || ex is ArgumentException)
             {
                 _log.LogErrorFromException(ex);
             }
+            _taskInfoReceived = true;
         }
 
         public void CleanupTask(ITask task) { }
-        internal class WasmTaskReflectionBuilder
+
+        /// <summary>
+        /// Functions for creating a Task type from properties it should have.
+        /// </summary>
+        internal static class WasmTaskReflectionBuilder
         {
             /// <summary>
             /// Creates the type for the Task using reflection from the properties gathered in the factory.
@@ -126,6 +140,15 @@ namespace MSBuildWasm
                 }
 
                 return typeBuilder.CreateType();
+            }
+            private static void DefineProperty(TypeBuilder typeBuilder, TaskPropertyInfo prop)
+            {
+                FieldBuilder fieldBuilder = typeBuilder.DefineField($"_{prop.Name}", prop.PropertyType, FieldAttributes.Private);
+                PropertyBuilder propertyBuilder = typeBuilder.DefineProperty(prop.Name, PropertyAttributes.HasDefault, prop.PropertyType, null);
+
+                DefineGetter(typeBuilder, prop, fieldBuilder, propertyBuilder);
+                DefineSetter(typeBuilder, prop, fieldBuilder, propertyBuilder);
+                DefineAttributes(prop, propertyBuilder);
             }
             private static void DefineGetter(TypeBuilder typeBuilder, TaskPropertyInfo param, FieldBuilder fieldBuilder, PropertyBuilder propertyBuilder)
             {
@@ -169,15 +192,6 @@ namespace MSBuildWasm
                 {
                     propertyBuilder.SetCustomAttribute(new CustomAttributeBuilder(typeof(RequiredAttribute).GetConstructor(Type.EmptyTypes), []));
                 }
-            }
-            private static void DefineProperty(TypeBuilder typeBuilder, TaskPropertyInfo prop)
-            {
-                FieldBuilder fieldBuilder = typeBuilder.DefineField($"_{prop.Name}", prop.PropertyType, FieldAttributes.Private);
-                PropertyBuilder propertyBuilder = typeBuilder.DefineProperty(prop.Name, PropertyAttributes.HasDefault, prop.PropertyType, null);
-
-                DefineGetter(typeBuilder, prop, fieldBuilder, propertyBuilder);
-                DefineSetter(typeBuilder, prop, fieldBuilder, propertyBuilder);
-                DefineAttributes(prop, propertyBuilder);
             }
 
         }
