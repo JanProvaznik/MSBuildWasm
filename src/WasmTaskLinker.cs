@@ -41,7 +41,7 @@ namespace MSBuildWasm
             }));
             _log.LogMessage(MessageImportance.Low, "Linked logger functions to WebAssembly module.");
         }
-        public void LinkTaskInfo(Store store, TaskInfoEventHandler? eventHandler)
+        public void LinkTaskInfo(Store store, TaskInfoEventHandler eventHandler)
         {
             Define("msbuild-taskinfo", "TaskInfo", Function.FromCallback(store, (Caller caller, int address, int length) =>
             {
