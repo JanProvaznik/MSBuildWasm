@@ -1,60 +1,58 @@
-// Licensed to the .NET Foundation under one or more agreements.
-// The .NET Foundation licenses this file to you under the MIT license.
-
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
 using Microsoft.Build.UnitTests.Shared;
 using MSBuildWasm;
 using Xunit;
 using Shouldly;
+using System.Runtime.InteropServices;
 using Microsoft.Build.UnitTests;
-using System.Reflection;
+using System.Diagnostics;
 
 namespace WasmTasksTests
 {
-    public class WasmTask_Tests
+    public class WasmTask_Tests : IDisposable
     {
-        public class TemplateWasmTask : WasmTask
+        private const string SOLUTION_ROOT_PATH = "../../../../../";
+        private const string WASM_RUST_TARGET_PATH = "target/wasm32-wasi/release/";
+        private static readonly string[] s_names = ["rust_template", "rust_concat2files", "rust_mergedirectories"];
+        private static readonly string[] s_paths = [$"templates/content/RustWasmTaskTemplate/{s_names[0]}/", $"examples/{s_names[1]}/", $"examples/{s_names[2]}/"];
+
+        private static readonly string s_templateFilePath;
+        private static readonly string s_concatFilePath;
+        private static readonly string s_mergeFilePath;
+
+        static WasmTask_Tests()
         {
-            public TemplateWasmTask() : base()
-            {
-                // set some default values
-                WasmFilePath = "../../../../../templates/content/RustWasmTaskTemplate/rust_template/target/wasm32-wasi/release/rust_template.wasm";
-                BuildEngine = new MockEngine();
-            }
+            s_templateFilePath = Path.Combine(SOLUTION_ROOT_PATH, s_paths[0], WASM_RUST_TARGET_PATH, $"{s_names[0]}.wasm");
+            s_concatFilePath = Path.Combine(SOLUTION_ROOT_PATH, s_paths[1], WASM_RUST_TARGET_PATH, $"{s_names[1]}.wasm");
+            s_mergeFilePath = Path.Combine(SOLUTION_ROOT_PATH, s_paths[2], WASM_RUST_TARGET_PATH, $"{s_names[2]}.wasm");
         }
-        public class ConcatWasmTask : WasmTask
+
+        public WasmTask_Tests()
         {
-            public ITaskItem InputFile1 { get; set; }
-            public ITaskItem InputFile2 { get; set; }
-            [Output]
-            public ITaskItem OutputFile { get; set; }
-            public ConcatWasmTask() : base()
+            CompileRustWasm();
+        }
+
+        public void Dispose()
+        {
+        }
+
+        private void CompileRustWasm()
+        {
+            string[] rust_test_names = [s_templateFilePath, s_concatFilePath, s_mergeFilePath];
+            string manifest_suffix = "../../../";
+            foreach (string name in rust_test_names)
             {
-                // set some default values
-                WasmFilePath = "../../../../../examples/rust_concat2files/target/wasm32-wasi/release/rust_concat2files.wasm";
-                BuildEngine = new MockEngine();
+                string path = Path.GetDirectoryName(name)!;
+                string cargo_toml = Path.Combine(path, manifest_suffix, "Cargo.toml");
+                ExecuteCommand($"cargo build --release --target wasm32-wasi --manifest-path {cargo_toml}");
             }
         }
 
-        public class DirectoryMergeWasmTask : WasmTask
-        {
-            public ITaskItem[] Dirs { get; set; }
-            public string MergedName { get; set; }
-            [Output]
-            public ITaskItem MergedDir { get; set; }
-            public DirectoryMergeWasmTask() : base()
-            {
-                // set some default values
-                WasmFilePath = "../../../../../examples/rust_mergedirectories/target/wasm32-wasi/release/rust_mergedirectories.wasm";
-                BuildEngine = new MockEngine();
-            }
-        }
         [Fact]
         public void ExecuteTemplate_ShouldSucceed()
         {
             var task = new TemplateWasmTask();
-            
             task.Execute().ShouldBeTrue();
         }
 
@@ -70,15 +68,13 @@ namespace WasmTasksTests
             const string conc = s1 + s2;
             const string outputPath = "wasmconcatoutput.txt";
 
-            // Ensure directory structure exists
             Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(Environment.CurrentDirectory, inputPath1)) ?? ".");
             Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(Environment.CurrentDirectory, inputPath2)) ?? ".");
-
 
             File.WriteAllText(inputPath1, s1);
             File.WriteAllText(inputPath2, s2);
 
-            var task = new ConcatWasmTask()
+            var task = new ConcatWasmTask
             {
                 InputFile1 = new TaskItem(inputPath1),
                 InputFile2 = new TaskItem(inputPath2),
@@ -92,7 +88,6 @@ namespace WasmTasksTests
             File.Delete(outputPath);
         }
 
-        // directory merge task
         [Theory]
         [InlineData("dir1", "dir2")]
         [InlineData(@"folder/dir1", @"folder/dir2")]
@@ -100,20 +95,9 @@ namespace WasmTasksTests
         [InlineData(@"deep/folder/structure/dir1", @"deep/folder/structure/dir2")]
         public void ExecuteDirectoryMergeDifferentPaths(string inputPath1, string inputPath2)
         {
-            // let's have a task that takes TaskItem[] and a string inputs and outputs a one ITaskItem which is the directory
+            CreateTestDirectories(inputPath1, inputPath2);
 
-            // create the directories
-            Directory.CreateDirectory(inputPath1);
-            // fill the directory with 2 files
-            File.WriteAllText(Path.Combine(inputPath1, "file1.txt"), "file1");
-            File.WriteAllText(Path.Combine(inputPath1, "file2.txt"), "file2");
-            Directory.CreateDirectory(inputPath2);
-            // fill the directory with 3 files
-            File.WriteAllText(Path.Combine(inputPath2, "file3.txt"), "file3");
-            File.WriteAllText(Path.Combine(inputPath2, "file4.txt"), "file4");
-            File.WriteAllText(Path.Combine(inputPath2, "file5.txt"), "file5");
-
-            var task = new DirectoryMergeWasmTask()
+            var task = new DirectoryMergeWasmTask
             {
                 Dirs = new ITaskItem[] { new TaskItem(inputPath1), new TaskItem(inputPath2) },
                 MergedName = "output_dir"
@@ -121,21 +105,97 @@ namespace WasmTasksTests
 
             task.Execute().ShouldBeTrue();
 
-            string outputDir = task.MergedDir.ItemSpec;
+            string outputDir = task.MergedDir!.ItemSpec;
             Directory.Exists(outputDir).ShouldBeTrue();
             Directory.GetFiles(outputDir).Length.ShouldBe(5);
 
-
-            // TODO formatting
-
-            // cleanup
-            Directory.Delete(inputPath1,true);
-            Directory.Delete(inputPath2, true);
-            Directory.Delete(outputDir, true);
-
-
+            CleanupTestDirectories(inputPath1, inputPath2, outputDir);
         }
 
+        private void CreateTestDirectories(string inputPath1, string inputPath2)
+        {
+            Directory.CreateDirectory(inputPath1);
+            File.WriteAllText(Path.Combine(inputPath1, "file1.txt"), "file1");
+            File.WriteAllText(Path.Combine(inputPath1, "file2.txt"), "file2");
 
+            Directory.CreateDirectory(inputPath2);
+            File.WriteAllText(Path.Combine(inputPath2, "file3.txt"), "file3");
+            File.WriteAllText(Path.Combine(inputPath2, "file4.txt"), "file4");
+            File.WriteAllText(Path.Combine(inputPath2, "file5.txt"), "file5");
+        }
+
+        private void CleanupTestDirectories(string inputPath1, string inputPath2, string outputDir)
+        {
+            Directory.Delete(inputPath1, true);
+            Directory.Delete(inputPath2, true);
+            Directory.Delete(outputDir, true);
+        }
+
+        private static void ExecuteCommand(string command)
+        {
+            bool isWindows = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
+            ProcessStartInfo startInfo = new ProcessStartInfo
+            {
+                FileName = isWindows ? "cmd.exe" : "/bin/bash",
+                Arguments = isWindows ? $"/C {command}" : $"-c \"{command}\"",
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var process = new Process { StartInfo = startInfo };
+            try
+            {
+                process.Start();
+                string output = process.StandardOutput.ReadToEnd();
+                string error = process.StandardError.ReadToEnd();
+                process.WaitForExit();
+
+                if (!string.IsNullOrEmpty(output)) Console.WriteLine($"Output: {output}");
+                if (!string.IsNullOrEmpty(error)) Console.WriteLine($"Error: {error}");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Exception: {ex.Message}");
+            }
+        }
+    public class TemplateWasmTask : WasmTask
+    {
+        public TemplateWasmTask() : base()
+        {
+            WasmFilePath = WasmTask_Tests.s_templateFilePath;
+            BuildEngine = new MockEngine();
+        }
     }
+
+    public class ConcatWasmTask : WasmTask
+    {
+        public ITaskItem? InputFile1 { get; set; }
+        public ITaskItem? InputFile2 { get; set; }
+        [Output]
+        public ITaskItem? OutputFile { get; set; }
+
+        public ConcatWasmTask() : base()
+        {
+            WasmFilePath = WasmTask_Tests.s_concatFilePath;
+            BuildEngine = new MockEngine();
+        }
+    }
+
+    public class DirectoryMergeWasmTask : WasmTask
+    {
+        public ITaskItem[]? Dirs { get; set; }
+        public string? MergedName { get; set; }
+        [Output]
+        public ITaskItem? MergedDir { get; set; }
+
+        public DirectoryMergeWasmTask() : base()
+        {
+            WasmFilePath = WasmTask_Tests.s_mergeFilePath;
+            BuildEngine = new MockEngine();
+        }
+    }
+    }
+
 }
