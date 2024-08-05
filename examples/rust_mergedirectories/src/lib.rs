@@ -15,7 +15,7 @@ pub enum MessageImportance {
 
 #[repr(C)] #[allow(dead_code)]
 pub enum TaskResult {
-    Success,
+    Success,  
     Failure,
 }
 
@@ -89,7 +89,7 @@ pub fn Execute() -> TaskResult {
         .collect();
     merge_directories(&wasm_paths, "output_dir").unwrap();
 
-        for path in wasm_paths {
+    for path in wasm_paths {
         log_warning(&format!("WasmPath: {}", path));
     }
 

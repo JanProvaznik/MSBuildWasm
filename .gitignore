@@ -4,3 +4,4 @@ obj/
 Playground/
 /MSBuildWasmLocal.sln
 /examples/go
+templates/src

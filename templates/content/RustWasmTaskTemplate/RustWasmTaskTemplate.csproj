@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MSBuildWasm" Version="0.1.0-alpha" />
+  </ItemGroup>
+  
+  <Target Name="CompileRustWasm" BeforeTargets="Build">
+    <Exec Command="cargo build --release --target wasm32-wasi --manifest-path=rust_template/Cargo.toml" />
+  </Target>
+
+
+  <UsingTask TaskName="Template" AssemblyFile="$(MSBuildWasmAssembly)" TaskFactory="WasmTaskFactory" Condition="$(MSBuildWasmAssembly) != ''">
+    <Task>rust_template\target\wasm32-wasi\release\rust_template.wasm</Task> 
+  </UsingTask>
+
+  <Target Name="WasmTasks" AfterTargets="Build">
+    <Template TestRequiredProperty="hello">
+      <Output TaskParameter="TestOutputProperty" PropertyName="OutputProperty"/>
+    </Template>
+  </Target>
+
+</Project>

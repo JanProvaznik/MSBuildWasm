@@ -13,6 +13,7 @@ using Microsoft.Build.Utilities;
 
 namespace MSBuildWasm
 {
+    // TODO documentation
     internal class Serializer
     {
 
@@ -46,6 +47,7 @@ namespace MSBuildWasm
                                         .ToDictionary(p => p.Name, p =>
                                         {
                                             object value = p.GetValue(o);
+                                            // TODO can other types be here?
                                             if (value is ITaskItem taskItem)
                                             {
                                                 return SerializeITaskItem(taskItem);

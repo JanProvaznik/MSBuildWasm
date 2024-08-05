@@ -1,0 +1,58 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageId>MSBuildWasm.Templates</PackageId>
+    <Authors>Jan Provaznik</Authors>
+    <Company>Microsoft</Company>
+    <Title>MSBuild WebAssembly Task Templates</Title>
+    <Description>Templates for creating MSBuild tasks from WebAssembly modules, which are compiled from different languages (Rust).</Description>
+    <PackageProjectUrl>https://github.com/JanProvaznik/MSBuildWasm</PackageProjectUrl>
+    <PackageType>Template</PackageType>
+    <TargetFramework>net8.0</TargetFramework>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <IsPackable>true</IsPackable>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <Version>0.1.0-alpha</Version>
+    <PackageTags>MSBuild;Wasm;WebAssembly</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageIcon>msbuildwasmlogo.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/JanProvaznik/MSBuildWasm</RepositoryUrl>
+
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <LocalizeTemplates>false</LocalizeTemplates>
+  </PropertyGroup>
+  
+  <ItemGroup>
+    <PackageReference Include="Microsoft.TemplateEngine.Tasks" Version="*" PrivateAssets="all" IsImplicitlyDefined="true" />
+    <PackageReference Include="MSBuildWasm" Version="0.1.0-alpha" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="content\**" Exclude="content\**\bin\**;content\**\obj\**;content\**\target\**;content\**\*.lock" PackagePath="content" />
+    <Compile Remove="**\*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\msbuildwasmlogo.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+
+</Project>

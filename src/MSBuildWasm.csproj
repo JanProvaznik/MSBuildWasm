@@ -4,14 +4,132 @@
     <TargetFramework>net8.0</TargetFramework>
     <AssemblyName>MSBuildWasm</AssemblyName>
     <ImplicitUsings>enable</ImplicitUsings>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
-  
+
   <ItemGroup>
-    <PackageReference Include="Microsoft.Build" Version="17.10.4" />
-    <PackageReference Include="Microsoft.Build.Tasks.Core" Version="17.10.4" />
-    <PackageReference Include="Microsoft.Build.Utilities.Core" Version="17.10.4" />
-    <PackageReference Include="Microsoft.Build.Framework" Version="17.10.4" />
-    <PackageReference Include="Wasmtime" Version="22.0.0"/>
+    <!-- these lines pack the build props/targets files to the `build` folder in the generated package.
+        by convention, the .NET SDK will look for build\<Package Id>.props and build\<Package Id>.targets
+        for automatic inclusion in the build. -->
+    <Content Include="build\MSBuildWasm.props" PackagePath="build\" />
+    <Content Include="build\MSBuildWasm.targets" PackagePath="build\" />
+    <Content Include="msbuildwasmlogo.png" />
   </ItemGroup>
 
+  <PropertyGroup>
+    <IsPackable>true</IsPackable>
+    <PackageId>MSBuildWasm</PackageId>
+    <Version>0.1.0-alpha</Version>
+    <Authors>Jan Provaznik</Authors>
+    <Company>Microsoft</Company>
+
+    <TargetsForTfmSpecificBuildOutput>
+      $(TargetsForTfmSpecificBuildOutput);_CopyManagedDependenciesToPackage
+  </TargetsForTfmSpecificBuildOutput>
+    
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <!-- This property tells MSBuild where the root folder of the package's build assets should be. Because we are not a library package, we should not pack to 'lib'. Instead, we choose 'tasks' by convention. -->
+    <BuildOutputTargetFolder>tasks</BuildOutputTargetFolder>
+    <!-- NuGet does validation that libraries in a package are exposed as dependencies, but we _explicitly_ do not want that behavior for MSBuild tasks. They are isolated by design. Therefore we ignore this specific warning. -->
+    <NoWarn>NU5100</NoWarn>
+    <!-- Suppress NuGet warning NU5128. -->
+    <SuppressDependenciesWhenPacking>true</SuppressDependenciesWhenPacking>
+    <GenerateDependencyFile>true</GenerateDependencyFile>
+    <!-- Tell NuGet that native dependency extensions are ok -->
+    <AllowedOutputExtensionsInPackageBuildOutputFolder>.so;.dylib</AllowedOutputExtensionsInPackageBuildOutputFolder>
+    <Title>MSBuild Tasks in Wasm</Title>
+    <Description>Introduces the WasmTaskFactory which creates MSBuild Tasks from .wasm modules.
+</Description>
+    <PackageIcon>msbuildwasmlogo.png</PackageIcon>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/JanProvaznik/MSBuildWasm</RepositoryUrl>
+    <PackageTags>MSBuild;Wasm;WebAssembly</PackageTags>
+    <PackageLicenseFile>LICENSE</PackageLicenseFile>
+  </PropertyGroup>
+
+  <Target
+        Name="AddBuildDependencyFileToBuiltProjectOutputGroupOutput"
+        BeforeTargets="BuiltProjectOutputGroup"
+        Condition=" '$(GenerateDependencyFile)' == 'true'">
+
+     <ItemGroup>
+        <BuiltProjectOutputGroupOutput
+            Include="$(ProjectDepsFilePath)"
+            TargetPath="$(ProjectDepsFileName)"
+            FinalOutputPath="$(ProjectDepsFilePath)" />
+    </ItemGroup>
+</Target>
+
+<!-- This is the target we defined above. It's purpose is to add all of our PackageReference and ProjectReference's runtime assets to our package output.  -->
+<Target Name="_CopyManagedDependenciesToPackage" DependsOnTargets="ResolveReferences">
+  <ItemGroup>
+
+    <_ManagedReferences Include="@(ReferenceCopyLocalPaths)" Condition="'%(ReferenceCopyLocalPaths.AssetType)' == 'runtime'" />
+    <_WasmRuntimeFiles Include="$(PkgWasmtime)\runtimes\**\*.*" />
+    <_WasmRuntimeFiles DestinationSubPath="runtimes\%(_WasmRuntimeFiles.RecursiveDir)%(_WasmRuntimeFiles.Filename)%(_WasmRuntimeFiles.Extension)" />
+    <!-- The TargetPath is the path inside the package that the source file will be placed. This is already precomputed in the ReferenceCopyLocalPaths items' DestinationSubPath, so reuse it here. -->
+    <BuildOutputInPackage Include="@(_ManagedReferences)" TargetPath="%(_ManagedReferences.DestinationSubPath)" />
+    <BuildOutputInPackage Include="@(_WasmRuntimeFiles)" TargetPath="%(_WasmRuntimeFiles.DestinationSubPath)" />
+  </ItemGroup>
+</Target>
+
+  <ItemGroup>
+    <PackageReference
+      Include="Microsoft.Build"
+      Version="17.10.4"
+      PrivateAssets="all"
+      ExcludeAssets="Runtime"
+
+    />
+    <PackageReference
+      Include="Microsoft.Build.Tasks.Core"
+      Version="17.10.4"
+      PrivateAssets="all"
+      ExcludeAssets="Runtime"
+
+    />
+    <PackageReference
+      Include="Microsoft.Build.Utilities.Core"
+      Version="17.10.4"
+      PrivateAssets="all"
+      ExcludeAssets="Runtime"
+
+    />
+    <PackageReference
+      Include="Microsoft.Build.Framework"
+      Version="17.10.4"
+      PrivateAssets="all"
+      ExcludeAssets="Runtime"
+
+    />
+    <PackageReference
+
+      GeneratePathProperty="true"
+      Include="Wasmtime"
+      Version="22.0.0"
+      PrivateAssets="all"
+    />
+
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\LICENSE">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\THIRDPARTYNOTICES.txt">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+    <None Include="..\msbuildwasmlogo.png">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
+    </None>
+  </ItemGroup>
 </Project>
