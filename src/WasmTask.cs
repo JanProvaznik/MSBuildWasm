@@ -19,18 +19,37 @@ namespace MSBuildWasm
     /// </summary>
     public abstract class WasmTask : Microsoft.Build.Utilities.Task, IWasmTask
     {
+        /// <summary>
+        /// The name of the function to execute in the WebAssembly module.
+        /// </summary>
         public const string ExecuteFunctionName = "Execute";
+        /// <summary>
+        /// The name of the function to get task info from the WebAssembly module.
+        /// </summary>
         public const string GetTaskInfoFunctionName = "GetTaskInfo";
+        /// <summary>
+        /// The path to the WebAssembly module.
+        /// </summary>
         public string WasmFilePath { get; set; }
+        /// <summary>
+        /// Preopened directories for the WebAssembly module.
+        /// </summary>
         public ITaskItem[] Directories { get; set; } = [];
+        /// <summary>
+        /// Whether to inherit the environment when running the WebAssembly module.
+        /// </summary>
         public bool InheritEnv { get; set; } = false;
-        public string Environment { get; set; } = null;
 
         // Reflection in WasmTaskFactory will add properties to a subclass.
 
+
+        /// <summary>
+        /// We don't want to serialize excluded properties using reflection to give them to the WebAssembly module.
+        /// </summary>
         internal readonly HashSet<string> _excludedPropertyNames =
-            [nameof(WasmFilePath), nameof(InheritEnv), nameof(ExecuteFunctionName),
-            nameof(Directories), nameof(Environment)];
+            [nameof(WasmFilePath), nameof(InheritEnv), nameof(ExecuteFunctionName), nameof(GetTaskInfoFunctionName),
+            nameof(Directories), ];
+
         private FileIsolator _fileIsolator;
 
         public WasmTask()
@@ -43,6 +62,10 @@ namespace MSBuildWasm
             CopyAllTaskItemPropertiesToTmp();
 
         }
+        /// <summary>
+        /// Executes the WebAssembly task.
+        /// </summary>
+        /// <returns>True if the task executed successfully, false otherwise.</returns>
         public override bool Execute()
         {
             Initialize();
@@ -50,8 +73,11 @@ namespace MSBuildWasm
             ExecuteWasm();
             return !Log.HasLoggedErrors;
         }
-
-        private WasiConfiguration GetWasiConfig()
+        /// <summary>
+        /// Creates a WasiConfiguration for the Wasmtime from properties of this class.
+        /// </summary>
+        /// <returns>WasiConfiguration with appropriately pre-opened directories and stdio.</returns>
+        private WasiConfiguration CreateWasiConfig()
         {
             var wasiConfig = new WasiConfiguration();
             if (InheritEnv)
@@ -68,10 +94,15 @@ namespace MSBuildWasm
             return wasiConfig;
 
         }
-
+        /// <summary>
+        /// Sets up the Wasmtime instance for executing the WebAssembly module.
+        /// </summary>
+        /// <param name="engine">The Wasmtime engine.</param>
+        /// <param name="store">The Wasmtime store.</param>
+        /// <returns>An Instance object representing the instantiated WebAssembly module.</returns>
         private Instance SetupWasmtimeInstance(Engine engine, Store store)
         {
-            store.SetWasiConfiguration(GetWasiConfig());
+            store.SetWasiConfiguration(CreateWasiConfig());
 
             using var module = Wasmtime.Module.FromFile(engine, WasmFilePath);
             using var linker = new WasmTaskLinker(engine, Log);
@@ -82,6 +113,9 @@ namespace MSBuildWasm
             return linker.Instantiate(store, module);
 
         }
+        /// <summary>
+        /// Executes the WebAssembly module.
+        /// </summary>
         private void ExecuteWasm()
         {
             using var engine = new Engine();
@@ -143,6 +177,11 @@ namespace MSBuildWasm
                 CopyPropertyToTmp(property);
             }
         }
+
+        /// <summary>
+        /// Copies a single property to the temporary directory.
+        /// </summary>
+        /// <param name="property">The PropertyInfo of the property to copy.</param>
         private void CopyPropertyToTmp(PropertyInfo property)
         {
             object value = property.GetValue(this);
@@ -161,10 +200,9 @@ namespace MSBuildWasm
         }
 
         /// <summary>
-        /// 1. Read the output file
-        /// 2. copy outputs that are files
+        /// Extracts outputs from the WebAssembly task execution.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>True if outputs were successfully extracted, false otherwise.</returns>
         private bool ExtractOutputs()
         {
 
@@ -181,9 +219,11 @@ namespace MSBuildWasm
 
         }
 
-
-
-
+        /// <summary>
+        /// Reflects a JSON property to a class property.
+        /// </summary>
+        /// <param name="classProperties">Array of PropertyInfo for the class properties.</param>
+        /// <param name="jsonProperty">The JSON property to reflect.</param>
         private void ReflectJsonPropertyToClassProperty(PropertyInfo[] classProperties, JsonProperty jsonProperty)
         {
             // Find the matching property in the class
@@ -269,6 +309,11 @@ namespace MSBuildWasm
             }
         }
 
+        /// <summary>
+        /// Copies file/directory from sandboxing path based on information from the JSON element.
+        /// </summary>
+        /// <param name="jsonElement">The JSON element containing the task item data.</param>
+        /// <returns>An ITaskItem representing the extracted task item.</returns>
         private ITaskItem ExtractTaskItem(JsonElement jsonElement)
         {
             // guest internal path
@@ -276,16 +321,22 @@ namespace MSBuildWasm
             // host path
             string itemSpec = jsonElement.GetProperty("ItemSpec").GetString(); // TODO: firgure out if this is bad for security
             return _fileIsolator.CopyGuestToHost(wasmPath, itemSpec);
-
-
         }
+
+        /// <summary>
+        /// Extracts multiple task items from a JSON element.
+        /// </summary>
+        /// <param name="jsonElement">The JSON element containing the task items data.</param>
+        /// <returns>An array of ITaskItem representing the extracted task items.</returns>
         private ITaskItem[] ExtractTaskItems(JsonElement jsonElement)
         {
             return jsonElement.EnumerateArray().Select(ExtractTaskItem).ToArray();
         }
-
-
     }
+
+    /// <summary>
+    /// Helper class for isolating files.
+    /// </summary>
     internal class FileIsolator
     {
         private readonly TaskLoggingHelper _log;
@@ -303,6 +354,13 @@ namespace MSBuildWasm
             _inputPath = Path.Combine(_hostTmpDir.FullName, "input.json");
             _outputPath = Path.Combine(_hostTmpDir.FullName, "output.json");
         }
+
+        /// <summary>
+        /// Copies a file or directory from the guest (sandbox) environment to the host.
+        /// </summary>
+        /// <param name="wasmPath">The path in the sandbox environment.</param>
+        /// <param name="itemSpec">The destination path on the host.</param>
+        /// <returns>A TaskItem representing the copied item, or null if the item was not found.</returns>
 
         internal TaskItem CopyGuestToHost(string wasmPath, string itemSpec)
         {
@@ -325,6 +383,9 @@ namespace MSBuildWasm
             return new TaskItem(itemSpec);
 
         }
+        /// <summary>
+        /// Creates directories for sandboxing.
+        /// </summary>
         internal void CreateTmpDirs()
         {
             _sharedTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
@@ -333,7 +394,7 @@ namespace MSBuildWasm
         }
 
         /// <summary>
-        /// Remove temporary directories.
+        /// Removes temporary directories.
         /// </summary>
         internal void Cleanup()
         {
@@ -341,6 +402,10 @@ namespace MSBuildWasm
             DeleteTemporaryDirectory(_hostTmpDir);
         }
 
+        /// <summary>
+        /// Helper function for deleting a directory.
+        /// </summary>
+        /// <param name="directory"></param>
         private void DeleteTemporaryDirectory(DirectoryInfo directory)
         {
             if (directory != null)
@@ -356,7 +421,6 @@ namespace MSBuildWasm
                 }
             }
         }
-
         private static void DirectoryCopy(string sourcePath, string destinationPath)
         {
             DirectoryInfo diSource = new DirectoryInfo(sourcePath);
@@ -364,7 +428,7 @@ namespace MSBuildWasm
 
             CopyAll(diSource, diTarget);
         }
-        public static void CopyAll(DirectoryInfo source, DirectoryInfo target)
+        private static void CopyAll(DirectoryInfo source, DirectoryInfo target)
         {
             Directory.CreateDirectory(target.FullName);
 
@@ -382,14 +446,22 @@ namespace MSBuildWasm
                 CopyAll(diSourceSubDir, nextTargetSubDir);
             }
         }
-
+        /// <summary>
+        /// We put all files to the sandbox to the root.
+        /// </summary>
+        /// <param name="path">original path</param>
+        /// <returns>flattened sandbox path</returns>
         private string ConvertToSandboxPath(string path)
         {
             return path.Replace(Path.DirectorySeparatorChar, '_')
                        .Replace(Path.AltDirectorySeparatorChar, '_')
                        .Replace(':', '_');
         }
-
+        /// <summary>
+        /// Tries to read the task output from the output file.
+        /// </summary>
+        /// <param name="taskOutput">output file contents</param>
+        /// <returns>true if the output file exists</returns>
         internal bool TryGetTaskOutput(out string taskOutput)
         {
             if (File.Exists(_outputPath))
@@ -403,6 +475,10 @@ namespace MSBuildWasm
                 return false;
             }
         }
+        /// <summary>
+        /// Copies file/directory to sandbox directory.
+        /// </summary>
+        /// <param name="taskItem">TaskItem representation of a file/directory</param>
         internal void CopyTaskItemToTmpDir(ITaskItem taskItem)
         {
             // ItemSpec = path in usual circumstances
