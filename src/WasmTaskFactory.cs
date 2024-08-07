@@ -81,7 +81,7 @@ namespace MSBuildWasm
                 linker.LinkTaskInfo(store, TaskInfoEvent);
                 Instance instance = linker.Instantiate(store, module);
                 // WASIp2: get structured info from GetTaskInfo function return value
-                Action getTaskInfo = instance.GetAction("GetTaskInfo");
+                Action getTaskInfo = instance.GetAction(WasmTask.GetTaskInfoFunctionName);
                 if (getTaskInfo == null)
                 {
                     _log.LogError("Function 'GetTaskInfo' not found in the WebAssembly module.");
