@@ -22,9 +22,9 @@ namespace MSBuildWasm
 
         // Reflection in WasmTaskFactory will add properties to a subclass.
 
-        private readonly HashSet<string> _nonInputPropertyNames =
+        internal readonly HashSet<string> _excludedPropertyNames =
             [nameof(WasmFilePath), nameof(InheritEnv), nameof(ExecuteFunctionName),
-            nameof(Directories), nameof(InheritEnv), nameof(Environment)];
+            nameof(Directories), nameof(Environment)];
         private DirectoryInfo _sharedTmpDir;
         private DirectoryInfo _hostTmpDir;
         private string _inputPath;
@@ -114,7 +114,7 @@ namespace MSBuildWasm
         {
             _inputPath = Path.Combine(_hostTmpDir.FullName, "input.json");
             _outputPath = Path.Combine(_hostTmpDir.FullName, "output.json");
-            File.WriteAllText(_inputPath, CreateTaskInputJSON());
+            File.WriteAllText(_inputPath, Serializer.SerializeTaskInput(this));
             Log.LogMessage(MessageImportance.Low, $"Created input file: {_inputPath}");
 
         }
@@ -219,7 +219,7 @@ namespace MSBuildWasm
         {
             IEnumerable<PropertyInfo> properties = GetType().GetProperties().Where(p =>
                  (typeof(ITaskItem).IsAssignableFrom(p.PropertyType) || typeof(ITaskItem[]).IsAssignableFrom(p.PropertyType))
-                 && !_nonInputPropertyNames.Contains(p.Name)
+                 && !_excludedPropertyNames.Contains(p.Name)
              );
 
             foreach (PropertyInfo property in properties)
@@ -245,21 +245,6 @@ namespace MSBuildWasm
                 }
             }
         }
-
-        // TODO does it belong here? + the rest of json-related logic
-        private string CreateTaskInputJSON()
-        {
-            var sb = new StringBuilder();
-            sb.Append("{\"properties\":");
-            sb.Append(Serializer.SerializeProperties(this, _nonInputPropertyNames));
-            sb.Append(",\"directories\":");
-            sb.Append(Serializer.SerializeDirectories(Directories));
-            sb.Append('}');
-
-            return sb.ToString();
-
-        }
-
 
         /// <summary>
         /// 1. Read the output file

@@ -108,7 +108,7 @@ namespace MSBuildWasm
         {
             try
             {
-                _taskProperties = Serializer.ConvertTaskInfoJsonToProperties(taskInfoJson);
+                _taskProperties = Serializer.DeserializeTaskInfoJson(taskInfoJson);
             }
             catch (Exception ex) when (ex is JsonException || ex is KeyNotFoundException || ex is ArgumentException)
             {

@@ -85,7 +85,7 @@ namespace WasmTasksTests
             };
 
 
-            TaskPropertyInfo[] propsParsed = Serializer.ConvertTaskInfoJsonToProperties(taskInfoJson);
+            TaskPropertyInfo[] propsParsed = Serializer.DeserializeTaskInfoJson(taskInfoJson);
 
             propsExpected.ShouldBeEquivalentTo(propsParsed);
         }
