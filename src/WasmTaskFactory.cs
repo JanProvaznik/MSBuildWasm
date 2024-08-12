@@ -15,10 +15,12 @@ namespace MSBuildWasm
     /// </summary>
     public class WasmTaskFactory : ITaskFactory2
     {
-        // TODO avoid hardcoded when possible
+        /// <summary>
+        /// Name displayed in the MSBuild log.
+        /// </summary>
         public string FactoryName => nameof(WasmTaskFactory);
+        public TaskLoggingHelper Log { get; set; }
         private TaskPropertyInfo[] _taskProperties;
-        private TaskLoggingHelper _log;
         private bool _taskInfoReceived = false;
         private string _taskName;
         private string _taskPath;
@@ -45,7 +47,7 @@ namespace MSBuildWasm
 
         public bool Initialize(string taskName, IDictionary<string, string> factoryIdentityParameters, IDictionary<string, TaskPropertyInfo> parameterGroup, string taskBody, IBuildEngine taskFactoryLoggingHost)
         {
-            _log = new TaskLoggingHelper(taskFactoryLoggingHost, taskName)
+            Log = new TaskLoggingHelper(taskFactoryLoggingHost, taskName)
             {
                 HelpKeywordPrefix = $"WasmTask.{taskName}."
             };
@@ -74,7 +76,7 @@ namespace MSBuildWasm
             {
                 using var engine = new Engine();
                 using var module = Wasmtime.Module.FromFile(engine, _taskPath);
-                using var linker = new WasmTaskLinker(engine, _log);
+                using var linker = new WasmTaskLinker(engine, Log);
                 using var store = new Store(engine);
                 linker.DefineWasi();
                 linker.LinkLogFunctions(store);
@@ -84,7 +86,7 @@ namespace MSBuildWasm
                 Action getTaskInfo = instance.GetAction(WasmTask.GetTaskInfoFunctionName);
                 if (getTaskInfo == null)
                 {
-                    _log.LogError("Function 'GetTaskInfo' not found in the WebAssembly module.");
+                    Log.LogError("Function 'GetTaskInfo' not found in the WebAssembly module.");
                     return;
                 }
 
@@ -92,11 +94,11 @@ namespace MSBuildWasm
             }
             catch (WasmtimeException ex)
             {
-                _log.LogErrorFromException(ex, true);
+                Log.LogErrorFromException(ex, true);
             }
             if (!_taskInfoReceived)
             {
-                _log.LogError("Task info was not received from the WebAssembly module.");
+                Log.LogError("Task info was not received from the WebAssembly module.");
             }
         }
 
@@ -104,15 +106,19 @@ namespace MSBuildWasm
         /// Handling callback with Task Info JSON.
         /// </summary>
         /// <remarks>WASIp2: get structured info from GetTaskInfo function output and parse it via classes from wit-bindgen and convert them to properties, this event scheme unnecessary</remarks>
-        private void OnTaskInfoReceived(object sender, string taskInfoJson)
+        internal void OnTaskInfoReceived(object sender, string taskInfoJson)
         {
             try
             {
                 _taskProperties = Serializer.DeserializeTaskInfoJson(taskInfoJson);
             }
-            catch (Exception ex) when (ex is JsonException || ex is KeyNotFoundException || ex is ArgumentException)
+            catch (Exception ex) when (ex is JsonException || ex is KeyNotFoundException || ex is ArgumentException || ex is InvalidOperationException)
             {
-                _log.LogErrorFromException(ex);
+                Log.LogError("Could not deserialize Task Info JSON. {0}:{1}", ex.GetType().ToString(), ex.Message);
+            }
+            catch (Exception ex)
+            {
+                Log.LogError("Unknown error in Task Info JSON deserialization. {0}", ex.Message);
             }
             _taskInfoReceived = true;
         }

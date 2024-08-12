@@ -50,29 +50,47 @@ namespace WasmTasksTests
             Assert.NotNull(resultType.GetProperty(prop1name));
             Assert.Null(resultType.GetProperty(prop2name));
         }
-        // split/theory
-        [Fact]
-        public void BuildTaskType_CreatesTypeWithCorrectAttributes()
+
+        [Theory]
+        [InlineData("StringProp", typeof(string), true, false)]
+        [InlineData("BoolProp", typeof(bool), false, true)]
+        [InlineData("TaskItemProp", typeof(ITaskItem), false, false)]
+        [InlineData("StringArrayProp", typeof(string[]), true, true)]
+        public void BuildTaskType_CreatesTypeWithCorrectAttributes(string propertyName, Type propertyType, bool isOutput, bool isRequired)
         {
             // Arrange
             const string taskName = "TestTask";
-            const string prop1name = "p1";
-            const string prop2name = "p2";
             TaskPropertyInfo[] properties = new[]
             {
-                new TaskPropertyInfo(prop1name, typeof(string), output: true, required: false),
-                new TaskPropertyInfo(prop2name, typeof(bool), false, true)
-            };
+            new TaskPropertyInfo(propertyName, propertyType, isOutput, isRequired)
+        };
 
             // Act
             Type resultType = WasmTaskReflectionBuilder.BuildTaskType(taskName, properties);
 
             // Assert
-            Assert.NotNull(resultType.GetProperty(prop1name)!.GetCustomAttribute<OutputAttribute>());
-            Assert.Null(resultType.GetProperty(prop1name)!.GetCustomAttribute<RequiredAttribute>());
-            Assert.NotNull(resultType.GetProperty(prop2name)!.GetCustomAttribute<RequiredAttribute>());
-            Assert.Null(resultType.GetProperty(prop2name)!.GetCustomAttribute<OutputAttribute>());
+            PropertyInfo? property = resultType.GetProperty(propertyName);
+            Assert.NotNull(property);
+
+            if (isOutput)
+            {
+                Assert.NotNull(property!.GetCustomAttribute<OutputAttribute>());
+            }
+            else
+            {
+                Assert.Null(property!.GetCustomAttribute<OutputAttribute>());
+            }
+
+            if (isRequired)
+            {
+                Assert.NotNull(property!.GetCustomAttribute<RequiredAttribute>());
+            }
+            else
+            {
+                Assert.Null(property!.GetCustomAttribute<RequiredAttribute>());
+            }
         }
+
         [Fact]
         public void ConvertJsonTaskInfoToProperties_ShouldParseProperties()
         {
@@ -90,16 +108,21 @@ namespace WasmTasksTests
             propsExpected.ShouldBeEquivalentTo(propsParsed);
         }
 
-        // the task returns undeserializable json, should error
-        //[Fact]
-        //public void GetTaskInfo_InvalidJson_ShouldError()
-        //{
-        //    const string invalidJson = "{ \"Properties\": { \"Dirs\": { \"type\": \"ITaskItem[]\", \"required\": true, \"output\": false }, \"MergedDir\": { \"type\": \"ITaskItem\", \"required\": false, \"output\": true }, \"MergedName\": { \"type\": \"string\", \"required\": false, \"output\": false } ";
+        [Fact]
+        public void GetTaskInfo_InvalidJson_ShouldError()
+        {
+            const string invalidJson = "{ \"Properties\": { \"Dirs\": { \"type\": \"ITaskItem[]\", \"required\": true, \"output\": false }, \"MergedDir\": { \"type\": \"ITaskItem\", \"required\": false, \"output\": true }, \"MergedName\": { \"type\": \"string\", \"required\": false, \"output\": false {} ";
 
-        //    WasmTaskFactory factory = new WasmTaskFactory();
+            MockEngine m = new MockEngine();
 
-        //    factory.OnTaskInfoReceived(null, invalidJson);
+            WasmTaskFactory factory = new WasmTaskFactory
+            {
+                Log = new Microsoft.Build.Utilities.TaskLoggingHelper(m, "TestTask")
+            };
 
+            factory.OnTaskInfoReceived(null, invalidJson);
+            m.AssertLogContains("Error");
+        }
 
 
 

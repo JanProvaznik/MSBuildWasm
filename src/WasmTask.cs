@@ -301,11 +301,11 @@ namespace MSBuildWasm
             }
             catch (JsonException ex)
             {
-                Log.LogError($"Error parsing JSON: {ex.Message}");
+                Log.LogError($"Error parsing output JSON: {ex.Message}");
             }
             catch (Exception ex)
             {
-                Log.LogError($"Error Reflecting properties from Json to Class: {ex.Message}");
+                Log.LogError($"Error Reflecting properties from Json to Class after task run: {ex.Message}");
             }
         }
 

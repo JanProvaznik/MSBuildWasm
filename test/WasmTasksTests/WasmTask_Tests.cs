@@ -13,6 +13,7 @@ namespace WasmTasksTests
     public class WasmTask_Tests : IDisposable
     {
         private const string SOLUTION_ROOT_PATH = "../../../../../";
+        private const string TEST_PROJECT_PATH = "../../../";
         private const string WASM_RUST_TARGET_PATH = "target/wasm32-wasi/release/";
         private static readonly string[] s_names = ["rust_template", "rust_concat2files", "rust_mergedirectories"];
         private static readonly string[] s_paths = [$"templates/content/RustWasmTaskTemplate/{s_names[0]}/", $"examples/{s_names[1]}/", $"examples/{s_names[2]}/"];
@@ -160,42 +161,220 @@ namespace WasmTasksTests
                 Console.WriteLine($"Exception: {ex.Message}");
             }
         }
-    public class TemplateWasmTask : WasmTask
-    {
-        public TemplateWasmTask() : base()
+        public class TemplateWasmTask : WasmTask
         {
-            WasmFilePath = WasmTask_Tests.s_templateFilePath;
-            BuildEngine = new MockEngine();
+            public TemplateWasmTask() : base()
+            {
+                WasmFilePath = WasmTask_Tests.s_templateFilePath;
+                BuildEngine = new MockEngine();
+            }
         }
-    }
 
-    public class ConcatWasmTask : WasmTask
-    {
-        public ITaskItem? InputFile1 { get; set; }
-        public ITaskItem? InputFile2 { get; set; }
-        [Output]
-        public ITaskItem? OutputFile { get; set; }
-
-        public ConcatWasmTask() : base()
+        public class ConcatWasmTask : WasmTask
         {
-            WasmFilePath = WasmTask_Tests.s_concatFilePath;
-            BuildEngine = new MockEngine();
+            public ITaskItem? InputFile1 { get; set; }
+            public ITaskItem? InputFile2 { get; set; }
+            [Output]
+            public ITaskItem? OutputFile { get; set; }
+
+            public ConcatWasmTask() : base()
+            {
+                WasmFilePath = WasmTask_Tests.s_concatFilePath;
+                BuildEngine = new MockEngine();
+            }
         }
-    }
 
-    public class DirectoryMergeWasmTask : WasmTask
-    {
-        public ITaskItem[]? Dirs { get; set; }
-        public string? MergedName { get; set; }
-        [Output]
-        public ITaskItem? MergedDir { get; set; }
-
-        public DirectoryMergeWasmTask() : base()
+        public class DirectoryMergeWasmTask : WasmTask
         {
-            WasmFilePath = WasmTask_Tests.s_mergeFilePath;
-            BuildEngine = new MockEngine();
+            public ITaskItem[]? Dirs { get; set; }
+            public string? MergedName { get; set; }
+            [Output]
+            public ITaskItem? MergedDir { get; set; }
+
+            public DirectoryMergeWasmTask() : base()
+            {
+                WasmFilePath = WasmTask_Tests.s_mergeFilePath;
+                BuildEngine = new MockEngine();
+            }
         }
-    }
+        private class CustomRustE2ETest
+        {
+            private readonly string _name;
+            private readonly string _templatePath;
+            private readonly string _testProjectPath;
+
+            public CustomRustE2ETest(string name, string toplevel, string executeRustCode, string getTaskInfoRustCode)
+            {
+                _name = name;
+                _templatePath = Path.Combine(SOLUTION_ROOT_PATH, s_paths[0]);
+                _testProjectPath = Path.Combine(TEST_PROJECT_PATH, "GeneratedRustTests", _name);
+
+                CopyTemplate();
+                CreateLibRs(toplevel, executeRustCode, getTaskInfoRustCode);
+                Compile();
+            }
+
+            private void CopyTemplate()
+            {
+                if (Directory.Exists(_testProjectPath))
+                {
+                    Directory.Delete(_testProjectPath, true);
+                }
+                DirectoryCopy(_templatePath, _testProjectPath, true);
+            }
+
+            private void CreateLibRs(string topLevel, string execute, string getTaskInfo)
+            {
+                string contents = $@"
+mod msbuild;
+use msbuild::logging::{{log_warning, log_error, log_message}};
+use msbuild::task_info::{{task_info, Property, PropertyType, TaskInfoStruct, TaskResult}};
+use serde::{{Serialize, Deserialize}};
+{topLevel}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub fn Execute() -> TaskResult
+{{
+{execute}
+}}
+
+#[no_mangle]
+#[allow(non_snake_case)]
+pub fn GetTaskInfo() 
+{{
+{getTaskInfo}
+}}
+";
+                File.WriteAllText(Path.Combine(_testProjectPath, "src", "lib.rs"), contents);
+            }
+
+            private void Compile()
+            {
+                string cargo_toml = Path.Combine(_testProjectPath, "Cargo.toml");
+                ExecuteCommand($"cargo build --release --target wasm32-wasi --manifest-path {cargo_toml}");
+            }
+
+            public string GetWasmFilePath()
+            {
+                return Path.Combine(_testProjectPath, WASM_RUST_TARGET_PATH, $"rust_template.wasm");
+            }
+
+            private static void DirectoryCopy(string sourceDirName, string destDirName, bool copySubDirs)
+            {
+                DirectoryInfo dir = new DirectoryInfo(sourceDirName);
+                DirectoryInfo[] dirs = dir.GetDirectories();
+
+                if (!Directory.Exists(destDirName))
+                {
+                    Directory.CreateDirectory(destDirName);
+                }
+
+                FileInfo[] files = dir.GetFiles();
+                foreach (FileInfo file in files)
+                {
+                    string tempPath = Path.Combine(destDirName, file.Name);
+                    file.CopyTo(tempPath, false);
+                }
+
+                if (copySubDirs)
+                {
+                    foreach (DirectoryInfo subdir in dirs)
+                    {
+                        string tempPath = Path.Combine(destDirName, subdir.Name);
+                        DirectoryCopy(subdir.FullName, tempPath, copySubDirs);
+                    }
+                }
+            }
+        }
+
+        private class EmptyWasmTask : WasmTask
+        {
+            public EmptyWasmTask(string path) : base()
+            {
+                WasmFilePath = path;
+                BuildEngine = new MockEngine();
+            }
+        }
+
+        // what happens if the rust tries to log invalid strings
+        // note that when there is an error in the test, the template .wasm is used leading to unclear messages
+        [Theory]
+        [InlineData("invmem_nullptr", "std::ptr::null()", "0", false)]
+        [InlineData("invmem_nullptr2", "std::ptr::null()", "10", false)]
+        [InlineData("invmem_longer", "c_str.as_ptr()", "1000", false)]
+        [InlineData("invmem_toobigptr", "usize::MAX as *const i8", "200", true)]
+        [InlineData("invmem_maxlen", "c_str.as_ptr()", "usize::MAX", true)]
+        public void LogInvalidMemory(string name, string memAddress, string len, bool shouldError)
+        {
+            var e2e = new CustomRustE2ETest(name, @"use msbuild::logging::{{LogWarning}};"
+                , $@"
+let invalid_json = ""{{\""key\"": \""value\""""; 
+let c_str = std::ffi::CString::new(invalid_json).unwrap();
+unsafe{{
+LogWarning({memAddress},{len})
+}}
+println!(""{{}}"", ""{{\""properties\"":{{}}}}"");
+TaskResult::Success 
+", "");
+
+            var task = new EmptyWasmTask(e2e.GetWasmFilePath());
+            task.Execute();
+
+
+            if (shouldError)
+            {
+                task.Log.HasLoggedErrors.ShouldBeTrue();
+            }
+            else
+            {
+                task.Log.HasLoggedErrors.ShouldBeFalse();
+            }
+        }
+
+        private class OPropTask : WasmTask
+        {
+            [Output]
+            public string? OProp { get; set; }
+
+            public OPropTask(string wasmPath) : base()
+            {
+                WasmFilePath = wasmPath;
+                BuildEngine = new MockEngine();
+            }
+        }
+
+        [Theory]
+        [InlineData("invout_nothing", "")]
+        [InlineData("invout_empty", "{}")]
+        [InlineData("invout_invalidjson", "{{}")]
+        [InlineData("invout_integerprop", @"{\""properties\"":{\""OProp\"":11}}")]
+        [InlineData("invout_dictprop", @"{\""properties\"":{\""OProp\"":{\""a\"":\""b\""}}}")]
+        [InlineData("invout_arrayprop", @"{\""properties\"":{\""OProp\"":[{\""a\"":\""b\""}]}}")] //sus
+        [InlineData("invout_unspecifiedprop", @"{\""properties\"":{\""OProp\"":{}}}")]
+        public void InvalidOutputShouldError(string name, string output)
+        {
+            var e2e = new CustomRustE2ETest(name, "", @$"println!(""{{}}"", ""{output}"");TaskResult::Success", @"
+    let task_info_struct = TaskInfoStruct {
+        name: String::from(""testtest""),
+        properties: vec![
+            Property {
+                name: String::from(""OProp""),
+                output: true,
+                required: false,
+                property_type: PropertyType::String,
+            },
+        ],
+    };
+    task_info(task_info_struct);
+");
+
+            var task = new OPropTask(e2e.GetWasmFilePath());
+            task.Execute();
+            task.Log.HasLoggedErrors.ShouldBeTrue();
+
+        }
+
     }
 
 }
