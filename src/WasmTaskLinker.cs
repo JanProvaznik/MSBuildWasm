@@ -64,7 +64,7 @@ namespace MSBuildWasm
         private string ExtractStringFromCallerMemory(Caller caller, int address, int length)
         {
             Memory memory = caller.GetMemory("memory") ?? throw new WasmtimeException("WebAssembly module did not export a memory.");
-            // TODO any ways to provide more safety here?
+            // TODO any ways to provide more safety here? at least try catch and log?
             return memory.ReadString(address, length);
         }
 

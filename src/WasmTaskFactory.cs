@@ -29,7 +29,6 @@ namespace MSBuildWasm
             TaskInfoEvent += OnTaskInfoReceived;
         }
 
-
         public Type TaskType { get; private set; }
 
         public ITask CreateTask(IBuildEngine taskFactoryLoggingHost)
@@ -38,6 +37,7 @@ namespace MSBuildWasm
             taskInstance.WasmFilePath = _taskPath;
             return taskInstance;
         }
+
         public TaskPropertyInfo[] GetTaskParameters()
         {
             return _taskProperties;
@@ -62,6 +62,7 @@ namespace MSBuildWasm
             return Initialize(taskName, null, parameterGroup, taskBody, taskFactoryLoggingHost);
         }
 
+        // TODO try to find your style and stick either to => or return
         public ITask CreateTask(IBuildEngine taskFactoryLoggingHost, IDictionary<string, string> taskIdentityParameters) => CreateTask(taskFactoryLoggingHost);
 
 
@@ -141,6 +142,7 @@ namespace MSBuildWasm
 
                 return typeBuilder.CreateType();
             }
+
             private static void DefineProperty(TypeBuilder typeBuilder, TaskPropertyInfo prop)
             {
                 FieldBuilder fieldBuilder = typeBuilder.DefineField($"_{prop.Name}", prop.PropertyType, FieldAttributes.Private);
@@ -150,6 +152,7 @@ namespace MSBuildWasm
                 DefineSetter(typeBuilder, prop, fieldBuilder, propertyBuilder);
                 DefineAttributes(prop, propertyBuilder);
             }
+
             private static void DefineGetter(TypeBuilder typeBuilder, TaskPropertyInfo param, FieldBuilder fieldBuilder, PropertyBuilder propertyBuilder)
             {
                 MethodBuilder getMethodBuilder = typeBuilder.DefineMethod(
@@ -165,6 +168,7 @@ namespace MSBuildWasm
 
                 propertyBuilder.SetGetMethod(getMethodBuilder);
             }
+
             private static void DefineSetter(TypeBuilder typeBuilder, TaskPropertyInfo param, FieldBuilder fieldBuilder, PropertyBuilder propertyBuilder)
             {
                 MethodBuilder setMethodBuilder = typeBuilder.DefineMethod(
@@ -181,6 +185,7 @@ namespace MSBuildWasm
 
                 propertyBuilder.SetSetMethod(setMethodBuilder);
             }
+
             private static void DefineAttributes(TaskPropertyInfo prop, PropertyBuilder propertyBuilder)
             {
                 if (prop.Output)
@@ -193,7 +198,6 @@ namespace MSBuildWasm
                     propertyBuilder.SetCustomAttribute(new CustomAttributeBuilder(typeof(RequiredAttribute).GetConstructor(Type.EmptyTypes), []));
                 }
             }
-
         }
     }
 }

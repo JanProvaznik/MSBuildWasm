@@ -84,6 +84,7 @@ namespace MSBuildWasm
             {
                 wasiConfig = wasiConfig.WithInheritedEnvironment();
             }
+            // TODO please explain in comment why you need to set standard output/input
             wasiConfig = wasiConfig.WithStandardOutput(_fileIsolator._outputPath).WithStandardInput(_fileIsolator._inputPath);
             wasiConfig = wasiConfig.WithPreopenedDirectory(_fileIsolator._sharedTmpDir.FullName, ".");
             foreach (ITaskItem dir in Directories)
@@ -186,15 +187,16 @@ namespace MSBuildWasm
         {
             object value = property.GetValue(this);
 
+            // TODO please check if nullcheck is not excessive here 
             if (value is ITaskItem taskItem && taskItem != null)
             {
-                _fileIsolator.CopyTaskItemToTmpDir(taskItem);
+                _fileIsolator.CopyTaskItemToSandbox(taskItem);
             }
             else if (value is ITaskItem[] taskItems && taskItems != null)
             {
                 foreach (ITaskItem taskItem_ in taskItems)
                 {
-                    _fileIsolator.CopyTaskItemToTmpDir(taskItem_);
+                    _fileIsolator.CopyTaskItemToSandbox(taskItem_);
                 }
             }
         }
@@ -231,47 +233,30 @@ namespace MSBuildWasm
 
             if (classProperty == null || !classProperty.CanWrite)
             {
-                Log.LogMessage(MessageImportance.Normal, $"Property outupted by WasmTask {jsonProperty.Name} not found or is read-only.");
+                Log.LogMessage(MessageImportance.Normal, $"Property outputted by WasmTask {jsonProperty.Name} not found or is read-only.");
                 return;
             }
             // if property is not output don't copy
             if (classProperty.GetCustomAttribute<OutputAttribute>() == null)
             {
-                Log.LogMessage(MessageImportance.Normal, $"Property outupted by WasmTask {jsonProperty.Name} does not have the Output attribute, ignoring.");
+                Log.LogMessage(MessageImportance.Normal, $"Property outputted by WasmTask {jsonProperty.Name} does not have the Output attribute, ignoring.");
                 return;
             }
 
             // Parse and set the property value based on its type
             // note: can't use a switch because Type is not a constant
-            if (classProperty.PropertyType == typeof(string))
-            {
-                classProperty.SetValue(this, jsonProperty.Value.GetString());
-            }
-            else if (classProperty.PropertyType == typeof(bool))
-            {
-                classProperty.SetValue(this, jsonProperty.Value.GetBoolean());
-            }
-            else if (classProperty.PropertyType == typeof(ITaskItem))
-            {
-                classProperty.SetValue(this, ExtractTaskItem(jsonProperty.Value));
-            }
-            else if (classProperty.PropertyType == typeof(ITaskItem[]))
-            {
-                classProperty.SetValue(this, ExtractTaskItems(jsonProperty.Value));
-            }
-            else if (classProperty.PropertyType == typeof(string[]))
-            {
-                classProperty.SetValue(this, jsonProperty.Value.EnumerateArray().Select(j => j.GetString()).ToArray());
-            }
-            else if (classProperty.PropertyType == typeof(bool[]))
-            {
-                classProperty.SetValue(this, jsonProperty.Value.EnumerateArray().Select(j => j.GetBoolean()).ToArray());
-            }
-            else
-            {
-                throw new ArgumentException($"Unsupported property type: {classProperty.PropertyType}"); // this should never happen, only programming error in this class or factory could cause it.
-            }
 
+            // TODO check if it looks any better for you with conditional switch ;)
+            classProperty.SetValue(this, classProperty.PropertyType switch
+            {
+                Type t when t == typeof(string) => jsonProperty.Value.GetString(),
+                Type t when t == typeof(bool) => jsonProperty.Value.GetBoolean(),
+                Type t when t == typeof(ITaskItem) => ExtractTaskItem(jsonProperty.Value),
+                Type t when t == typeof(ITaskItem[]) => ExtractTaskItems(jsonProperty.Value),
+                Type t when t == typeof(string[]) => jsonProperty.Value.EnumerateArray().Select(j => j.GetString()).ToArray(),
+                Type t when t == typeof(bool[]) => jsonProperty.Value.EnumerateArray().Select(j => j.GetBoolean()).ToArray(),
+                _ => throw new ArgumentException($"Unsupported property type: {classProperty.PropertyType}")
+            });
         }
 
         /// <summary>
@@ -319,7 +304,7 @@ namespace MSBuildWasm
             // guest internal path
             string wasmPath = jsonElement.GetProperty("WasmPath").GetString();
             // host path
-            string itemSpec = jsonElement.GetProperty("ItemSpec").GetString(); // TODO: firgure out if this is bad for security
+            string itemSpec = jsonElement.GetProperty("ItemSpec").GetString(); // TODO: figure out if this is bad for security
             return _fileIsolator.CopyGuestToHost(wasmPath, itemSpec);
         }
 
@@ -479,7 +464,7 @@ namespace MSBuildWasm
         /// Copies file/directory to sandbox directory.
         /// </summary>
         /// <param name="taskItem">TaskItem representation of a file/directory</param>
-        internal void CopyTaskItemToTmpDir(ITaskItem taskItem)
+        internal void CopyTaskItemToSandbox(ITaskItem taskItem)
         {
             // ItemSpec = path in usual circumstances
             string sourcePath = taskItem.ItemSpec;

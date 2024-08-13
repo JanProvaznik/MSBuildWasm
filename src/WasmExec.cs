@@ -11,11 +11,14 @@ namespace MSBuildWasm
     public class WasmExec : Microsoft.Build.Utilities.Task, IWasmTask
     {
         public string WasmFilePath { get; set; }
+
         public string WasmtimeArgs { get; set; }
+
         public override bool Execute()
         {
             if (!IsWasmtimeInPath())
             {
+                // TODO can you report the exact checked path?
                 Log.LogError("Wasmtime not in path.");
                 return false;
             }

@@ -1,17 +1,14 @@
 ﻿using System.Reflection;
-using Microsoft.Build.UnitTests;
-using Xunit;
 using Microsoft.Build.Framework;
 using MSBuildWasm;
-using static MSBuildWasm.WasmTaskFactory;
 using Shouldly;
+using static MSBuildWasm.WasmTaskFactory;
 
 namespace WasmTasksTests
 {
+    // TODO add cases for invalid scenarious to demo how you handle the cases when customer does something wrong
     public class WasmTaskFactory_Tests
     {
-
-
         [Fact]
         public void BuildTaskType_CreatesTypeWithCorrectName()
         {
@@ -76,7 +73,7 @@ namespace WasmTasksTests
         [Fact]
         public void ConvertJsonTaskInfoToProperties_ShouldParseProperties()
         {
-            string taskInfoJson = "{ \"properties\": [  {\"name\":\"Dirs\", \"property_type\": \"ITaskItemArray\", \"required\": true, \"output\": false }, {\"name\":\"MergedDir\", \"property_type\": \"ITaskItem\", \"required\": false, \"output\": true }, {\"name\":\"MergedName\", \"property_type\": \"string\", \"required\": false, \"output\": false } ] }";
+            string taskInfoJson = "{ \"properties\": [  {\"name\":\"Dirs\", \"property_typexxx\": \"ITaskItemArray\", \"required\": true, \"output\": false }, {\"name\":\"MergedDir\", \"property_type\": \"ITaskItem\", \"required\": false, \"output\": true }, {\"name\":\"MergedName\", \"property_type\": \"string\", \"required\": false, \"output\": false } ] }";
             TaskPropertyInfo[] propsExpected = new TaskPropertyInfo[]
             {
                 new TaskPropertyInfo("Dirs", typeof(ITaskItem[]), false, true),

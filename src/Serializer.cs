@@ -9,7 +9,7 @@ using Microsoft.Build.Framework;
 namespace MSBuildWasm
 {
     /// <summary>
-    /// Provides serialization functionality for MSBuild task properties for transfering info between .NET task and Wasm module.
+    /// Provides serialization functionality for MSBuild task properties for transferring info between .NET task and Wasm module.
     /// </summary>
     internal class Serializer
     {
@@ -44,6 +44,8 @@ namespace MSBuildWasm
         /// <returns>True if the type is supported, false otherwise.</returns>
         private static bool IsSupportedType(Type type)
         {
+            // TODO it's easy to miss handling new added types here, in ConvertStringToType, ReflectJsonPropertyToClassProperty and in PropertyType :D
+            // please think on how to make it more robust/universal
             return type == typeof(string) || type == typeof(bool) || type == typeof(ITaskItem) || type == typeof(ITaskItem[]) || type == typeof(string[]) || type == typeof(bool[]);
         }
 
@@ -54,6 +56,7 @@ namespace MSBuildWasm
         /// <returns>A JSON string representing the serialized properties.</returns>
         internal static string SerializeProperties(WasmTask task)
         {
+            // TODO any null checks or try/catch?
             var propertiesToSerialize = task.GetType()
                                         .GetProperties(BindingFlags.Public | BindingFlags.Instance)
                                         .Where(prop => !task._excludedPropertyNames.Contains(prop.Name) && IsSupportedType(prop.PropertyType))
@@ -88,6 +91,12 @@ namespace MSBuildWasm
         /// <param name="jsonProperty">The JSON element containing property information.</param>
         /// <returns>A TaskPropertyInfo object representing the extracted information.</returns>
         private static TaskPropertyInfo DeserializePropertyInfo(JsonElement jsonProperty) =>
+
+            // TODO what if customer makes a typo in property name?
+            // According to the tests, it fails with System.Collections.Generic.KeyNotFoundException : The given key was not present in the dictionary.
+            // Please provide a better handling: maybe a custom exception with a message that the property name is not correct
+
+            // TODO constants for property names?
             new TaskPropertyInfo(
                 jsonProperty.GetProperty("name").GetString(),
                 ConvertStringToType(jsonProperty.GetProperty("property_type").GetString()),
@@ -144,6 +153,8 @@ namespace MSBuildWasm
             using JsonDocument document = JsonDocument.Parse(json);
             JsonElement root = document.RootElement;
 
+            // TODO if there is no properties, should we notify the user?
+            // TODO you are searching for the same key words in multiple places, maybe extract it to a file with constants?
             if (root.TryGetProperty("properties", out JsonElement properties))
             {
                 foreach (JsonElement jsonProperty in properties.EnumerateArray())
