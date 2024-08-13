@@ -41,6 +41,11 @@ namespace MSBuildWasm
             }));
             _log.LogMessage(MessageImportance.Low, "Linked logger functions to WebAssembly module.");
         }
+        /// <summary>
+        /// Links callback for function that will be called from WebAssembly module to provide task info.
+        /// </summary>
+        /// <param name="store">Wasmtime store to which to link the callback</param>
+        /// <param name="eventHandler">event handler for callback with info</param>
         public void LinkTaskInfo(Store store, TaskInfoEventHandler eventHandler)
         {
             Define("msbuild-taskinfo", "TaskInfo", Function.FromCallback(store, (Caller caller, int address, int length) =>
@@ -48,7 +53,14 @@ namespace MSBuildWasm
                 eventHandler?.Invoke(this, ExtractStringFromCallerMemory(caller, address, length));
             }));
         }
-
+        /// <summary>
+        /// Copies string from Wasmtime memory to .NET memory and returns it.
+        /// </summary>
+        /// <param name="caller"></param>
+        /// <param name="address">Where in the Wasmtime memory the string is</param>
+        /// <param name="length">How long is it</param>
+        /// <returns>The read string</returns>
+        /// <exception cref="WasmtimeException">The module needs to export memory for the operation to be valid.</exception>
         private string ExtractStringFromCallerMemory(Caller caller, int address, int length)
         {
             Memory memory = caller.GetMemory("memory") ?? throw new WasmtimeException("WebAssembly module did not export a memory.");
@@ -71,7 +83,5 @@ namespace MSBuildWasm
                 _ => MessageImportance.Normal,
             };
         }
-
-
     }
 }

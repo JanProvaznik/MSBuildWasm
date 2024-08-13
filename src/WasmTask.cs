@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
@@ -11,47 +10,82 @@ using Wasmtime;
 
 namespace MSBuildWasm
 {
-    // Add documentation
+    /// <summary>
+    /// Base class for WebAssembly tasks for MSBuild.
+    /// It appears to MSBuild as a regular task.
+    /// 1. a class deriving from in is created in WasmTaskFactory during runtime, Properties are added to it using reflection.
+    /// 2. MSBuild sets the values of properties of an instance of the class from .proj XML
+    /// 3. Execute is called from MSBuild and runs the WebAssembly module with input created from properties of the class
+    /// </summary>
     public abstract class WasmTask : Microsoft.Build.Utilities.Task, IWasmTask
     {
-        const string ExecuteFunctionName = "Execute";
+        /// <summary>
+        /// The name of the function to execute in the WebAssembly module.
+        /// </summary>
+        public const string ExecuteFunctionName = "Execute";
+        /// <summary>
+        /// The name of the function to get task info from the WebAssembly module.
+        /// </summary>
+        public const string GetTaskInfoFunctionName = "GetTaskInfo";
+        /// <summary>
+        /// The path to the WebAssembly module.
+        /// </summary>
         public string WasmFilePath { get; set; }
+        /// <summary>
+        /// Preopened directories for the WebAssembly module.
+        /// </summary>
         public ITaskItem[] Directories { get; set; } = [];
+        /// <summary>
+        /// Whether to inherit the environment when running the WebAssembly module.
+        /// </summary>
         public bool InheritEnv { get; set; } = false;
-        public string Environment { get; set; } = null;
 
         // Reflection in WasmTaskFactory will add properties to a subclass.
 
-        private readonly HashSet<string> _nonInputPropertyNames =
-            [nameof(WasmFilePath), nameof(InheritEnv), nameof(ExecuteFunctionName),
-            nameof(Directories), nameof(InheritEnv), nameof(Environment)];
-        private DirectoryInfo _sharedTmpDir;
-        private DirectoryInfo _hostTmpDir;
-        private string _inputPath;
-        private string _outputPath;
+
+        /// <summary>
+        /// We don't want to serialize excluded properties using reflection to give them to the WebAssembly module.
+        /// </summary>
+        internal readonly HashSet<string> _excludedPropertyNames =
+            [nameof(WasmFilePath), nameof(InheritEnv), nameof(ExecuteFunctionName), nameof(GetTaskInfoFunctionName),
+            nameof(Directories), ];
+
+        private FileIsolator _fileIsolator;
 
         public WasmTask()
         {
         }
 
+        public void Initialize()
+        {
+            _fileIsolator = new FileIsolator(Log);
+            CopyAllTaskItemPropertiesToTmp();
+
+        }
+        /// <summary>
+        /// Executes the WebAssembly task.
+        /// </summary>
+        /// <returns>True if the task executed successfully, false otherwise.</returns>
         public override bool Execute()
         {
-            CreateTmpDirs();
-            CopyAllTaskItemPropertiesToTmp();
+            Initialize();
             CreateTaskIO();
             ExecuteWasm();
             return !Log.HasLoggedErrors;
         }
-
-        private WasiConfiguration GetWasiConfig()
+        /// <summary>
+        /// Creates a WasiConfiguration for the Wasmtime from properties of this class.
+        /// </summary>
+        /// <returns>WasiConfiguration with appropriately pre-opened directories and stdio.</returns>
+        private WasiConfiguration CreateWasiConfig()
         {
             var wasiConfig = new WasiConfiguration();
             if (InheritEnv)
             {
                 wasiConfig = wasiConfig.WithInheritedEnvironment();
             }
-            wasiConfig = wasiConfig.WithStandardOutput(_outputPath).WithStandardInput(_inputPath);
-            wasiConfig = wasiConfig.WithPreopenedDirectory(_sharedTmpDir.FullName, ".");
+            wasiConfig = wasiConfig.WithStandardOutput(_fileIsolator._outputPath).WithStandardInput(_fileIsolator._inputPath);
+            wasiConfig = wasiConfig.WithPreopenedDirectory(_fileIsolator._sharedTmpDir.FullName, ".");
             foreach (ITaskItem dir in Directories)
             {
                 wasiConfig = wasiConfig.WithPreopenedDirectory(dir.ItemSpec, dir.ItemSpec);
@@ -60,10 +94,15 @@ namespace MSBuildWasm
             return wasiConfig;
 
         }
-
+        /// <summary>
+        /// Sets up the Wasmtime instance for executing the WebAssembly module.
+        /// </summary>
+        /// <param name="engine">The Wasmtime engine.</param>
+        /// <param name="store">The Wasmtime store.</param>
+        /// <returns>An Instance object representing the instantiated WebAssembly module.</returns>
         private Instance SetupWasmtimeInstance(Engine engine, Store store)
         {
-            store.SetWasiConfiguration(GetWasiConfig());
+            store.SetWasiConfiguration(CreateWasiConfig());
 
             using var module = Wasmtime.Module.FromFile(engine, WasmFilePath);
             using var linker = new WasmTaskLinker(engine, Log);
@@ -74,6 +113,9 @@ namespace MSBuildWasm
             return linker.Instantiate(store, module);
 
         }
+        /// <summary>
+        /// Executes the WebAssembly module.
+        /// </summary>
         private void ExecuteWasm()
         {
             using var engine = new Engine();
@@ -106,106 +148,14 @@ namespace MSBuildWasm
                 Log.LogError($"Error reading output file: {ex.Message}");
 
             }
-            finally { Cleanup(); }
+            finally { _fileIsolator.Cleanup(); }
 
         }
 
         private void CreateTaskIO()
         {
-            _inputPath = Path.Combine(_hostTmpDir.FullName, "input.json");
-            _outputPath = Path.Combine(_hostTmpDir.FullName, "output.json");
-            File.WriteAllText(_inputPath, CreateTaskInputJSON());
-            Log.LogMessage(MessageImportance.Low, $"Created input file: {_inputPath}");
-
-        }
-        private void CreateTmpDirs()
-        {
-            _sharedTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
-            _hostTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
-            Log.LogMessage(MessageImportance.Low, $"Created shared temporary directories: {_sharedTmpDir} and {_hostTmpDir}");
-        }
-
-        /// <summary>
-        /// Remove temporary directories.
-        /// </summary>
-        private void Cleanup()
-        {
-            DeleteTemporaryDirectory(_sharedTmpDir);
-            DeleteTemporaryDirectory(_hostTmpDir);
-        }
-
-        private void DeleteTemporaryDirectory(DirectoryInfo directory)
-        {
-            if (directory != null)
-            {
-                try
-                {
-                    Directory.Delete(directory.FullName, true);
-                    Log.LogMessage(MessageImportance.Low, $"Removed temporary directory: {directory}");
-                }
-                catch (Exception ex)
-                {
-                    Log.LogMessage(MessageImportance.High, $"Failed to remove temporary directory: {directory}. Exception: {ex.Message}");
-                }
-            }
-        }
-
-
-        private void CopyTaskItemToTmpDir(ITaskItem taskItem)
-        {
-            // ItemSpec = path in usual circumstances
-            string sourcePath = taskItem.ItemSpec;
-            string sandboxPath = ConvertToSandboxPath(sourcePath);
-            string destinationPath = Path.Combine(_sharedTmpDir.FullName, sandboxPath);
-            // add metadatum for sandboxPath
-            taskItem.SetMetadata("WasmPath", sandboxPath);
-            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
-            if (Directory.Exists(sourcePath))
-            {
-                DirectoryCopy(sourcePath, destinationPath);
-            }
-            else if (File.Exists(sourcePath))
-            {
-                File.Copy(sourcePath, destinationPath);
-            }
-            else
-            {
-                Log.LogMessage(MessageImportance.High, $"Task item {sourcePath} not found.");
-            }
-            Log.LogMessage(MessageImportance.Low, $"Copied {sourcePath} to {destinationPath}");
-        }
-
-        private void DirectoryCopy(string sourcePath, string destinationPath)
-        {
-            DirectoryInfo diSource = new DirectoryInfo(sourcePath);
-            DirectoryInfo diTarget = new DirectoryInfo(destinationPath);
-
-            CopyAll(diSource, diTarget);
-        }
-        public static void CopyAll(DirectoryInfo source, DirectoryInfo target)
-        {
-            Directory.CreateDirectory(target.FullName);
-
-            // Copy each file into the new directory.
-            foreach (FileInfo fi in source.GetFiles())
-            {
-                fi.CopyTo(Path.Combine(target.FullName, fi.Name), true);
-            }
-
-            // Copy each subdirectory using recursion.
-            foreach (DirectoryInfo diSourceSubDir in source.GetDirectories())
-            {
-                DirectoryInfo nextTargetSubDir =
-                    target.CreateSubdirectory(diSourceSubDir.Name);
-                CopyAll(diSourceSubDir, nextTargetSubDir);
-            }
-        }
-
-        private string ConvertToSandboxPath(string path)
-        {
-            return path.Replace(Path.DirectorySeparatorChar, '_')
-                       .Replace(Path.AltDirectorySeparatorChar, '_')
-                       .Replace(':', '_');
+            File.WriteAllText(_fileIsolator._inputPath, Serializer.SerializeTaskInput(this));
+            Log.LogMessage(MessageImportance.Low, $"Created input file: {_fileIsolator._inputPath}");
         }
 
         /// <summary>
@@ -219,7 +169,7 @@ namespace MSBuildWasm
         {
             IEnumerable<PropertyInfo> properties = GetType().GetProperties().Where(p =>
                  (typeof(ITaskItem).IsAssignableFrom(p.PropertyType) || typeof(ITaskItem[]).IsAssignableFrom(p.PropertyType))
-                 && !_nonInputPropertyNames.Contains(p.Name)
+                 && !_excludedPropertyNames.Contains(p.Name)
              );
 
             foreach (PropertyInfo property in properties)
@@ -228,50 +178,36 @@ namespace MSBuildWasm
             }
         }
 
-        // TODO does sandboxing belong here?
+        /// <summary>
+        /// Copies a single property to the temporary directory.
+        /// </summary>
+        /// <param name="property">The PropertyInfo of the property to copy.</param>
         private void CopyPropertyToTmp(PropertyInfo property)
         {
             object value = property.GetValue(this);
 
             if (value is ITaskItem taskItem && taskItem != null)
             {
-                CopyTaskItemToTmpDir(taskItem);
+                _fileIsolator.CopyTaskItemToTmpDir(taskItem);
             }
             else if (value is ITaskItem[] taskItems && taskItems != null)
             {
                 foreach (ITaskItem taskItem_ in taskItems)
                 {
-                    CopyTaskItemToTmpDir(taskItem_);
+                    _fileIsolator.CopyTaskItemToTmpDir(taskItem_);
                 }
             }
         }
 
-        // TODO does it belong here? + the rest of json-related logic
-        private string CreateTaskInputJSON()
-        {
-            var sb = new StringBuilder();
-            sb.Append("{\"properties\":");
-            sb.Append(Serializer.SerializeProperties(this, _nonInputPropertyNames));
-            sb.Append(",\"directories\":");
-            sb.Append(Serializer.SerializeDirectories(Directories));
-            sb.Append('}');
-
-            return sb.ToString();
-
-        }
-
-
         /// <summary>
-        /// 1. Read the output file
-        /// 2. copy outputs that are files
+        /// Extracts outputs from the WebAssembly task execution.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>True if outputs were successfully extracted, false otherwise.</returns>
         private bool ExtractOutputs()
         {
-            if (File.Exists(_outputPath))
+
+            if (_fileIsolator.TryGetTaskOutput(out string taskOutput))
             {
-                string taskOutput = File.ReadAllText(_outputPath);
-                // TODO: figure out where to copy the output files
                 ReflectOutputJsonToClassProperties(taskOutput);
                 return true;
             }
@@ -280,11 +216,14 @@ namespace MSBuildWasm
                 Log.LogError("Output file not found");
                 return false;
             }
+
         }
 
-
-
-
+        /// <summary>
+        /// Reflects a JSON property to a class property.
+        /// </summary>
+        /// <param name="classProperties">Array of PropertyInfo for the class properties.</param>
+        /// <param name="jsonProperty">The JSON property to reflect.</param>
         private void ReflectJsonPropertyToClassProperty(PropertyInfo[] classProperties, JsonProperty jsonProperty)
         {
             // Find the matching property in the class
@@ -370,10 +309,62 @@ namespace MSBuildWasm
             }
         }
 
+        /// <summary>
+        /// Copies file/directory from sandboxing path based on information from the JSON element.
+        /// </summary>
+        /// <param name="jsonElement">The JSON element containing the task item data.</param>
+        /// <returns>An ITaskItem representing the extracted task item.</returns>
         private ITaskItem ExtractTaskItem(JsonElement jsonElement)
         {
-            string sandboxOuterPath = Path.Combine(_sharedTmpDir.FullName, jsonElement.GetProperty("WasmPath").GetString());
+            // guest internal path
+            string wasmPath = jsonElement.GetProperty("WasmPath").GetString();
+            // host path
             string itemSpec = jsonElement.GetProperty("ItemSpec").GetString(); // TODO: firgure out if this is bad for security
+            return _fileIsolator.CopyGuestToHost(wasmPath, itemSpec);
+        }
+
+        /// <summary>
+        /// Extracts multiple task items from a JSON element.
+        /// </summary>
+        /// <param name="jsonElement">The JSON element containing the task items data.</param>
+        /// <returns>An array of ITaskItem representing the extracted task items.</returns>
+        private ITaskItem[] ExtractTaskItems(JsonElement jsonElement)
+        {
+            return jsonElement.EnumerateArray().Select(ExtractTaskItem).ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Helper class for isolating files.
+    /// </summary>
+    internal class FileIsolator
+    {
+        private readonly TaskLoggingHelper _log;
+
+        internal DirectoryInfo _sharedTmpDir { get; set; }
+        internal DirectoryInfo _hostTmpDir { get; set; }
+        internal string _inputPath { get; set; }
+        internal string _outputPath { get; set; }
+
+
+        public FileIsolator(TaskLoggingHelper log)
+        {
+            _log = log;
+            CreateTmpDirs();
+            _inputPath = Path.Combine(_hostTmpDir.FullName, "input.json");
+            _outputPath = Path.Combine(_hostTmpDir.FullName, "output.json");
+        }
+
+        /// <summary>
+        /// Copies a file or directory from the guest (sandbox) environment to the host.
+        /// </summary>
+        /// <param name="wasmPath">The path in the sandbox environment.</param>
+        /// <param name="itemSpec">The destination path on the host.</param>
+        /// <returns>A TaskItem representing the copied item, or null if the item was not found.</returns>
+
+        internal TaskItem CopyGuestToHost(string wasmPath, string itemSpec)
+        {
+            string sandboxOuterPath = Path.Combine(_sharedTmpDir.FullName, wasmPath);
 
             if (File.Exists(sandboxOuterPath))
             {
@@ -386,16 +377,130 @@ namespace MSBuildWasm
             else
             {
                 // nothing to copy
-                Log.LogMessage(MessageImportance.Normal, $"Task output not found");
+                _log.LogMessage(MessageImportance.Normal, $"Task output not found");
                 return null;
             }
             return new TaskItem(itemSpec);
+
         }
-        private ITaskItem[] ExtractTaskItems(JsonElement jsonElement)
+        /// <summary>
+        /// Creates directories for sandboxing.
+        /// </summary>
+        internal void CreateTmpDirs()
         {
-            return jsonElement.EnumerateArray().Select(ExtractTaskItem).ToArray();
+            _sharedTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
+            _hostTmpDir = Directory.CreateDirectory(Path.Combine(Path.GetTempPath(), Path.GetRandomFileName()));
+            _log.LogMessage(MessageImportance.Low, $"Created shared temporary directories: {_sharedTmpDir} and {_hostTmpDir}");
         }
 
+        /// <summary>
+        /// Removes temporary directories.
+        /// </summary>
+        internal void Cleanup()
+        {
+            DeleteTemporaryDirectory(_sharedTmpDir);
+            DeleteTemporaryDirectory(_hostTmpDir);
+        }
 
+        /// <summary>
+        /// Helper function for deleting a directory.
+        /// </summary>
+        /// <param name="directory"></param>
+        private void DeleteTemporaryDirectory(DirectoryInfo directory)
+        {
+            if (directory != null)
+            {
+                try
+                {
+                    Directory.Delete(directory.FullName, true);
+                    _log.LogMessage(MessageImportance.Low, $"Removed temporary directory: {directory}");
+                }
+                catch (Exception ex)
+                {
+                    _log.LogMessage(MessageImportance.High, $"Failed to remove temporary directory: {directory}. Exception: {ex.Message}");
+                }
+            }
+        }
+        private static void DirectoryCopy(string sourcePath, string destinationPath)
+        {
+            DirectoryInfo diSource = new DirectoryInfo(sourcePath);
+            DirectoryInfo diTarget = new DirectoryInfo(destinationPath);
+
+            CopyAll(diSource, diTarget);
+        }
+        private static void CopyAll(DirectoryInfo source, DirectoryInfo target)
+        {
+            Directory.CreateDirectory(target.FullName);
+
+            // Copy each file into the new directory.
+            foreach (FileInfo fi in source.GetFiles())
+            {
+                fi.CopyTo(Path.Combine(target.FullName, fi.Name), true);
+            }
+
+            // Copy each subdirectory using recursion.
+            foreach (DirectoryInfo diSourceSubDir in source.GetDirectories())
+            {
+                DirectoryInfo nextTargetSubDir =
+                    target.CreateSubdirectory(diSourceSubDir.Name);
+                CopyAll(diSourceSubDir, nextTargetSubDir);
+            }
+        }
+        /// <summary>
+        /// We put all files to the sandbox to the root.
+        /// </summary>
+        /// <param name="path">original path</param>
+        /// <returns>flattened sandbox path</returns>
+        private string ConvertToSandboxPath(string path)
+        {
+            return path.Replace(Path.DirectorySeparatorChar, '_')
+                       .Replace(Path.AltDirectorySeparatorChar, '_')
+                       .Replace(':', '_');
+        }
+        /// <summary>
+        /// Tries to read the task output from the output file.
+        /// </summary>
+        /// <param name="taskOutput">output file contents</param>
+        /// <returns>true if the output file exists</returns>
+        internal bool TryGetTaskOutput(out string taskOutput)
+        {
+            if (File.Exists(_outputPath))
+            {
+                taskOutput = File.ReadAllText(_outputPath);
+                return true;
+            }
+            else
+            {
+                taskOutput = null;
+                return false;
+            }
+        }
+        /// <summary>
+        /// Copies file/directory to sandbox directory.
+        /// </summary>
+        /// <param name="taskItem">TaskItem representation of a file/directory</param>
+        internal void CopyTaskItemToTmpDir(ITaskItem taskItem)
+        {
+            // ItemSpec = path in usual circumstances
+            string sourcePath = taskItem.ItemSpec;
+            string sandboxPath = ConvertToSandboxPath(sourcePath);
+            string destinationPath = Path.Combine(_sharedTmpDir.FullName, sandboxPath);
+            // add metadatum for sandboxPath
+            taskItem.SetMetadata("WasmPath", sandboxPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(destinationPath));
+            if (Directory.Exists(sourcePath))
+            {
+                DirectoryCopy(sourcePath, destinationPath);
+            }
+            else if (File.Exists(sourcePath))
+            {
+                File.Copy(sourcePath, destinationPath);
+            }
+            else
+            {
+                _log.LogMessage(MessageImportance.High, $"Task item {sourcePath} not found.");
+            }
+            _log.LogMessage(MessageImportance.Low, $"Copied {sourcePath} to {destinationPath}");
+        }
     }
 }
