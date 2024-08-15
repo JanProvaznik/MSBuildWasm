@@ -17,7 +17,7 @@ namespace MSBuildWasm
     /// 2. MSBuild sets the values of properties of an instance of the class from .proj XML
     /// 3. Execute is called from MSBuild and runs the WebAssembly module with input created from properties of the class
     /// </summary>
-    public abstract class WasmTask : Microsoft.Build.Utilities.Task, IWasmTask
+    public abstract class WasmTask : Microsoft.Build.Utilities.Task
     {
         /// <summary>
         /// The name of the function to execute in the WebAssembly module.
