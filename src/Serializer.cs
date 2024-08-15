@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Reflection;
-using System.Text;
 using System.Text.Json;
 using Microsoft.Build.Framework;
 
@@ -13,6 +12,19 @@ namespace MSBuildWasm
     /// </summary>
     internal class Serializer
     {
+        public const string TaskItemGuestPathPropertyName = "WasmPath";
+        public const string TaskItemHostPathPropertyName = "ItemSpec";
+
+        const string PropertiesRoot = "properties";
+        private const string DirectoriesRoot = "directories";
+
+        // task info deserialization
+        const string NameProperty = "name";
+        const string PropertyTypeProperty = "property_type";
+        const string OutputProperty = "output";
+        const string RequiredProperty = "required";
+
+
         /// <summary>
         /// Serializes an ITaskItem into a dictionary of metadata.
         /// </summary>
@@ -22,8 +34,8 @@ namespace MSBuildWasm
         {
             return item.MetadataNames
                 .Cast<string>()
-                .ToDictionary(metadata => metadata, metadata => item.GetMetadata(metadata))
-                .Append(new KeyValuePair<string, string>("ItemSpec", item.ItemSpec))
+                .ToDictionary(metadata => metadata, item.GetMetadata)
+                .Append(new KeyValuePair<string, string>(TaskItemHostPathPropertyName, item.ItemSpec))
                 .ToDictionary(pair => pair.Key, pair => pair.Value);
         }
 
@@ -38,15 +50,36 @@ namespace MSBuildWasm
         }
 
         /// <summary>
-        /// Determines if a type is supported for serialization.
+        /// Represents the supported property types for serialization.
+        /// </summary>
+        public enum PropertyType
+        {
+            String,
+            Bool,
+            ITaskItem,
+            ITaskItemArray,
+            StringArray,
+            BoolArray,
+        }
+
+        private static readonly HashSet<Type> s_supportedPropetyTypes = new HashSet<Type>
+            {
+                typeof(string),
+                typeof(bool),
+                typeof(ITaskItem),
+                typeof(ITaskItem[]),
+                typeof(string[]),
+                typeof(bool[])
+            };
+
+        /// <summary>
+        /// Determines if a property type is supported.
         /// </summary>
         /// <param name="type">The type to check.</param>
         /// <returns>True if the type is supported, false otherwise.</returns>
-        private static bool IsSupportedType(Type type)
+        private static bool IsSupportedPropertyType(Type type)
         {
-            // TODO it's easy to miss handling new added types here, in ConvertStringToType, ReflectJsonPropertyToClassProperty and in PropertyType :D
-            // please think on how to make it more robust/universal
-            return type == typeof(string) || type == typeof(bool) || type == typeof(ITaskItem) || type == typeof(ITaskItem[]) || type == typeof(string[]) || type == typeof(bool[]);
+            return s_supportedPropetyTypes.Contains(type);
         }
 
         /// <summary>
@@ -56,10 +89,9 @@ namespace MSBuildWasm
         /// <returns>A JSON string representing the serialized properties.</returns>
         internal static string SerializeProperties(WasmTask task)
         {
-            // TODO any null checks or try/catch?
             var propertiesToSerialize = task.GetType()
                                         .GetProperties(BindingFlags.Public | BindingFlags.Instance)
-                                        .Where(prop => !task._excludedPropertyNames.Contains(prop.Name) && IsSupportedType(prop.PropertyType))
+                                        .Where(prop => !task._excludedPropertyNames.Contains(prop.Name) && IsSupportedPropertyType(prop.PropertyType))
                                         .ToDictionary(prop => prop.Name, prop =>
                                         {
                                             // unsupported types are already filtered out
@@ -90,31 +122,45 @@ namespace MSBuildWasm
         /// </summary>
         /// <param name="jsonProperty">The JSON element containing property information.</param>
         /// <returns>A TaskPropertyInfo object representing the extracted information.</returns>
-        private static TaskPropertyInfo DeserializePropertyInfo(JsonElement jsonProperty) =>
-
-            // TODO what if customer makes a typo in property name?
-            // According to the tests, it fails with System.Collections.Generic.KeyNotFoundException : The given key was not present in the dictionary.
-            // Please provide a better handling: maybe a custom exception with a message that the property name is not correct
-
-            // TODO constants for property names?
-            new TaskPropertyInfo(
-                jsonProperty.GetProperty("name").GetString(),
-                ConvertStringToType(jsonProperty.GetProperty("property_type").GetString()),
-                jsonProperty.GetProperty("output").GetBoolean(),
-                jsonProperty.GetProperty("required").GetBoolean()
-            );
-
-        /// <summary>
-        /// Represents the supported property types for serialization.
-        /// </summary>
-        public enum PropertyType
+        /// <exception cref="PropertyDeserializationException">Thrown when there's an error deserializing the property.</exception>
+        private static TaskPropertyInfo DeserializePropertyInfo(JsonElement jsonProperty)
         {
-            String,
-            Bool,
-            ITaskItem,
-            ITaskItemArray,
-            StringArray,
-            BoolArray,
+
+            try
+            {
+                return new TaskPropertyInfo(
+                    GetRequiredString(jsonProperty, NameProperty),
+                    ConvertStringToType(GetRequiredString(jsonProperty, PropertyTypeProperty)),
+                    GetRequiredBoolean(jsonProperty, OutputProperty),
+                    GetRequiredBoolean(jsonProperty, RequiredProperty)
+                );
+            }
+            catch (KeyNotFoundException ex)
+            {
+                throw new TaskInfoDeserializationException($"Missing property spec: {ex.Message}", ex);
+            }
+            catch (InvalidOperationException ex)
+            {
+                throw new TaskInfoDeserializationException($"Invalid property spec value: {ex.Message}", ex);
+            }
+        }
+
+        private static string GetRequiredString(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out JsonElement property))
+            {
+                throw new KeyNotFoundException(propertyName);
+            }
+            return property.GetString() ?? throw new InvalidOperationException($"{propertyName} cannot be null");
+        }
+
+        private static bool GetRequiredBoolean(JsonElement element, string propertyName)
+        {
+            if (!element.TryGetProperty(propertyName, out JsonElement property))
+            {
+                throw new KeyNotFoundException(propertyName);
+            }
+            return property.GetBoolean();
         }
 
         /// <summary>
@@ -122,12 +168,12 @@ namespace MSBuildWasm
         /// </summary>
         /// <param name="type">The string representation of the property type.</param>
         /// <returns>The corresponding Type for the given property type string.</returns>
-        /// <exception cref="ArgumentException">Thrown when an unsupported property type is provided.</exception>
+        /// <exception cref="TaskInfoDeserializationException">Thrown when an unsupported property type is provided.</exception>
         public static Type ConvertStringToType(string type)
         {
             if (!Enum.TryParse(type, true, out PropertyType propertyType))
             {
-                throw new ArgumentException($"Unsupported property type: {type}");
+                throw new TaskInfoDeserializationException($"Unsupported property type: {type}");
             }
 
             return propertyType switch
@@ -138,7 +184,7 @@ namespace MSBuildWasm
                 PropertyType.StringArray => typeof(string[]),
                 PropertyType.BoolArray => typeof(bool[]),
                 PropertyType.ITaskItemArray => typeof(ITaskItem[]),
-                _ => throw new ArgumentException($"Unsupported transfer type: {type}")
+                _ => throw new TaskInfoDeserializationException($"Unsupported transfer type: {type}")
             };
         }
 
@@ -153,14 +199,16 @@ namespace MSBuildWasm
             using JsonDocument document = JsonDocument.Parse(json);
             JsonElement root = document.RootElement;
 
-            // TODO if there is no properties, should we notify the user?
-            // TODO you are searching for the same key words in multiple places, maybe extract it to a file with constants?
-            if (root.TryGetProperty("properties", out JsonElement properties))
+            if (root.TryGetProperty(PropertiesRoot, out JsonElement properties))
             {
                 foreach (JsonElement jsonProperty in properties.EnumerateArray())
                 {
                     taskPropertyInfos.Add(DeserializePropertyInfo(jsonProperty));
                 }
+            }
+            else
+            {
+                throw new TaskInfoDeserializationException("No \"properties\" found in task info JSON.");
             }
 
             return [.. taskPropertyInfos];
@@ -172,14 +220,60 @@ namespace MSBuildWasm
         /// <returns>JSON string representing the task inputs.</returns>
         internal static string SerializeTaskInput(WasmTask task)
         {
-            var sb = new StringBuilder();
-            sb.Append("{\"properties\":");
-            sb.Append(SerializeProperties(task));
-            sb.Append(",\"directories\":");
-            sb.Append(SerializeDirectories(task.Directories));
-            sb.Append('}');
+            return $"{{\"{PropertiesRoot}\":{SerializeProperties(task)},\"{DirectoriesRoot}\":{SerializeDirectories(task.Directories)}}}";
+        }
 
-            return sb.ToString();
+        /// <summary>
+        /// Parses the provided JSON string and retrieves an enumerator for the properties
+        /// of the specified root element within the JSON structure.
+        /// </summary>
+        /// <param name="json">The JSON string to be parsed.</param>
+        /// <returns>An enumerator for the properties of the root element, allowing iteration over the JSON properties.</returns>
+        internal static JsonElement.ObjectEnumerator JsonPropertiesEnumeration(string json)
+        {
+            using JsonDocument document = JsonDocument.Parse(json);
+            JsonElement root = document.RootElement;
+            JsonElement properties = root.GetProperty(PropertiesRoot);
+
+            return properties.EnumerateObject();
+        }
+
+        /// <summary>
+        /// Retrieves the guest path from the provided task item JSON element.
+        /// </summary>
+        /// <param name="taskItemJsonElement">The JSON element containing task item data.</param>
+        /// <returns>A string representing the guest path extracted from the task item JSON element.</returns>
+        internal static string GetGuestPath(JsonElement taskItemJsonElement)
+        {
+            return taskItemJsonElement.GetProperty(TaskItemGuestPathPropertyName).GetString();
+        }
+
+        /// <summary>
+        /// Retrieves the host path from the provided task item JSON element.
+        /// </summary>
+        /// <param name="taskItemJsonElement">The JSON element containing task item data.</param>
+        /// <returns>A string representing the host path extracted from the task item JSON element.</returns>
+        internal static string GetHostPath(JsonElement taskItemJsonElement)
+        {
+            return taskItemJsonElement.GetProperty(TaskItemHostPathPropertyName).GetString();
+        }
+
+        /// <summary>
+        /// Exception type for errors deserializing task info.
+        /// </summary>
+        internal class TaskInfoDeserializationException : Exception
+        {
+            public TaskInfoDeserializationException()
+            {
+            }
+
+            public TaskInfoDeserializationException(string message) : base(message)
+            {
+            }
+
+            public TaskInfoDeserializationException(string message, Exception innerException) : base(message, innerException)
+            {
+            }
 
         }
     }

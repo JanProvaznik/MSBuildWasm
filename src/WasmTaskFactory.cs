@@ -62,9 +62,10 @@ namespace MSBuildWasm
             return Initialize(taskName, null, parameterGroup, taskBody, taskFactoryLoggingHost);
         }
 
-        // TODO try to find your style and stick either to => or return
-        public ITask CreateTask(IBuildEngine taskFactoryLoggingHost, IDictionary<string, string> taskIdentityParameters) => CreateTask(taskFactoryLoggingHost);
-
+        public ITask CreateTask(IBuildEngine taskFactoryLoggingHost, IDictionary<string, string> taskIdentityParameters)
+        {
+            return CreateTask(taskFactoryLoggingHost);
+        }
 
         /// <summary>
         /// Gets the properties of the Task from the WebAssembly module and sets them as a class field.
