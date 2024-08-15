@@ -5,3 +5,4 @@ Playground/
 /MSBuildWasmLocal.sln
 /examples/go
 templates/src
+/test/WasmTasksTests/GeneratedRustTests
