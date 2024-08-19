@@ -6,7 +6,6 @@ using static MSBuildWasm.WasmTaskFactory;
 
 namespace WasmTasksTests
 {
-    // TODO add cases for invalid scenarious to demo how you handle the cases when customer does something wrong
     public class WasmTaskFactory_Tests
     {
         [Fact]

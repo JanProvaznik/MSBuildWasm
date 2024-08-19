@@ -305,5 +305,7 @@ namespace MSBuildWasm
         {
             return jsonElement.EnumerateArray().Select(ExtractTaskItem).ToArray();
         }
+
+
     }
 }
