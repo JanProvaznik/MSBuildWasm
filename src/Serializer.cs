@@ -232,7 +232,7 @@ namespace MSBuildWasm
         /// <returns>An enumerator for the properties of the root element, allowing iteration over the JSON properties.</returns>
         internal static JsonElement.ObjectEnumerator JsonPropertiesEnumeration(string json)
         {
-            using JsonDocument document = JsonDocument.Parse(json);
+            JsonDocument document = JsonDocument.Parse(json);
             JsonElement root = document.RootElement;
             JsonElement properties = root.GetProperty(PropertiesRoot);
 

@@ -85,7 +85,7 @@ namespace WasmTasksTests
             }";
 
             // Act & Assert
-            var exception = Should.Throw<Serializer.TaskInfoDeserializationException>(() =>
+            Serializer.TaskInfoDeserializationException exception = Should.Throw<Serializer.TaskInfoDeserializationException>(() =>
                 Serializer.DeserializeTaskInfoJson(json));
             Assert.Contains("Unsupported property type:", exception.Message);
         }

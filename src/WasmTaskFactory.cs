@@ -15,7 +15,6 @@ namespace MSBuildWasm
     /// </summary>
     public class WasmTaskFactory : ITaskFactory2
     {
-        // TODO avoid hardcoded when possible
         public string FactoryName => nameof(WasmTaskFactory);
         private TaskPropertyInfo[] _taskProperties;
         private TaskLoggingHelper _log;
@@ -126,14 +125,17 @@ namespace MSBuildWasm
         /// </summary>
         internal static class WasmTaskReflectionBuilder
         {
+            private const string TaskAssemblyName = $"WasmTaskAssembly";
+            private const string TaskModuleName = $"WasmTaskModule";
+
             /// <summary>
             /// Creates the type for the Task using reflection from the properties gathered in the factory.
             /// </summary>
             public static Type BuildTaskType(string taskName, TaskPropertyInfo[] taskProperties)
             {
-                var assemblyName = new AssemblyName($"WasmTaskAssembly");
+                var assemblyName = new AssemblyName(TaskAssemblyName);
                 var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
-                ModuleBuilder moduleBuilder = assemblyBuilder.DefineDynamicModule($"WasmTaskModule");
+                ModuleBuilder moduleBuilder = assemblyBuilder.DefineDynamicModule(TaskModuleName);
 
                 TypeBuilder typeBuilder = moduleBuilder.DefineType(taskName, TypeAttributes.Public, typeof(WasmTask));
                 foreach (TaskPropertyInfo taskPropertyInfo in taskProperties)
