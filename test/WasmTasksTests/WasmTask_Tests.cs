@@ -1,12 +1,10 @@
-using Microsoft.Build.Framework;
-using Microsoft.Build.Utilities;
-using Microsoft.Build.UnitTests.Shared;
-using MSBuildWasm;
-using Xunit;
-using Shouldly;
-using System.Runtime.InteropServices;
-using Microsoft.Build.UnitTests;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using Microsoft.Build.Framework;
+using Microsoft.Build.UnitTests;
+using Microsoft.Build.Utilities;
+using MSBuildWasm;
+using Shouldly;
 
 namespace WasmTasksTests
 {

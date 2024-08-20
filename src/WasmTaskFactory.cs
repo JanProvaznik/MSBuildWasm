@@ -15,7 +15,6 @@ namespace MSBuildWasm
     /// </summary>
     public class WasmTaskFactory : ITaskFactory2
     {
-        // TODO avoid hardcoded when possible
         public string FactoryName => nameof(WasmTaskFactory);
         private TaskPropertyInfo[] _taskProperties;
         private TaskLoggingHelper _log;
@@ -29,7 +28,6 @@ namespace MSBuildWasm
             TaskInfoEvent += OnTaskInfoReceived;
         }
 
-
         public Type TaskType { get; private set; }
 
         public ITask CreateTask(IBuildEngine taskFactoryLoggingHost)
@@ -38,6 +36,7 @@ namespace MSBuildWasm
             taskInstance.WasmFilePath = _taskPath;
             return taskInstance;
         }
+
         public TaskPropertyInfo[] GetTaskParameters()
         {
             return _taskProperties;
@@ -62,8 +61,10 @@ namespace MSBuildWasm
             return Initialize(taskName, null, parameterGroup, taskBody, taskFactoryLoggingHost);
         }
 
-        public ITask CreateTask(IBuildEngine taskFactoryLoggingHost, IDictionary<string, string> taskIdentityParameters) => CreateTask(taskFactoryLoggingHost);
-
+        public ITask CreateTask(IBuildEngine taskFactoryLoggingHost, IDictionary<string, string> taskIdentityParameters)
+        {
+            return CreateTask(taskFactoryLoggingHost);
+        }
 
         /// <summary>
         /// Gets the properties of the Task from the WebAssembly module and sets them as a class field.
@@ -124,14 +125,17 @@ namespace MSBuildWasm
         /// </summary>
         internal static class WasmTaskReflectionBuilder
         {
+            private const string TaskAssemblyName = $"WasmTaskAssembly";
+            private const string TaskModuleName = $"WasmTaskModule";
+
             /// <summary>
             /// Creates the type for the Task using reflection from the properties gathered in the factory.
             /// </summary>
             public static Type BuildTaskType(string taskName, TaskPropertyInfo[] taskProperties)
             {
-                var assemblyName = new AssemblyName($"WasmTaskAssembly");
+                var assemblyName = new AssemblyName(TaskAssemblyName);
                 var assemblyBuilder = AssemblyBuilder.DefineDynamicAssembly(assemblyName, AssemblyBuilderAccess.Run);
-                ModuleBuilder moduleBuilder = assemblyBuilder.DefineDynamicModule($"WasmTaskModule");
+                ModuleBuilder moduleBuilder = assemblyBuilder.DefineDynamicModule(TaskModuleName);
 
                 TypeBuilder typeBuilder = moduleBuilder.DefineType(taskName, TypeAttributes.Public, typeof(WasmTask));
                 foreach (TaskPropertyInfo taskPropertyInfo in taskProperties)
@@ -141,6 +145,7 @@ namespace MSBuildWasm
 
                 return typeBuilder.CreateType();
             }
+
             private static void DefineProperty(TypeBuilder typeBuilder, TaskPropertyInfo prop)
             {
                 FieldBuilder fieldBuilder = typeBuilder.DefineField($"_{prop.Name}", prop.PropertyType, FieldAttributes.Private);
@@ -150,6 +155,7 @@ namespace MSBuildWasm
                 DefineSetter(typeBuilder, prop, fieldBuilder, propertyBuilder);
                 DefineAttributes(prop, propertyBuilder);
             }
+
             private static void DefineGetter(TypeBuilder typeBuilder, TaskPropertyInfo param, FieldBuilder fieldBuilder, PropertyBuilder propertyBuilder)
             {
                 MethodBuilder getMethodBuilder = typeBuilder.DefineMethod(
@@ -165,6 +171,7 @@ namespace MSBuildWasm
 
                 propertyBuilder.SetGetMethod(getMethodBuilder);
             }
+
             private static void DefineSetter(TypeBuilder typeBuilder, TaskPropertyInfo param, FieldBuilder fieldBuilder, PropertyBuilder propertyBuilder)
             {
                 MethodBuilder setMethodBuilder = typeBuilder.DefineMethod(
@@ -181,6 +188,7 @@ namespace MSBuildWasm
 
                 propertyBuilder.SetSetMethod(setMethodBuilder);
             }
+
             private static void DefineAttributes(TaskPropertyInfo prop, PropertyBuilder propertyBuilder)
             {
                 if (prop.Output)
@@ -193,7 +201,6 @@ namespace MSBuildWasm
                     propertyBuilder.SetCustomAttribute(new CustomAttributeBuilder(typeof(RequiredAttribute).GetConstructor(Type.EmptyTypes), []));
                 }
             }
-
         }
     }
 }

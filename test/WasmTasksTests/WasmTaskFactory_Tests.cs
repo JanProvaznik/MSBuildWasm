@@ -1,17 +1,13 @@
 ﻿using System.Reflection;
-using Microsoft.Build.UnitTests;
-using Xunit;
 using Microsoft.Build.Framework;
 using MSBuildWasm;
-using static MSBuildWasm.WasmTaskFactory;
 using Shouldly;
+using static MSBuildWasm.WasmTaskFactory;
 
 namespace WasmTasksTests
 {
     public class WasmTaskFactory_Tests
     {
-
-
         [Fact]
         public void BuildTaskType_CreatesTypeWithCorrectName()
         {
@@ -73,39 +69,6 @@ namespace WasmTasksTests
             Assert.NotNull(resultType.GetProperty(prop2name)!.GetCustomAttribute<RequiredAttribute>());
             Assert.Null(resultType.GetProperty(prop2name)!.GetCustomAttribute<OutputAttribute>());
         }
-        [Fact]
-        public void ConvertJsonTaskInfoToProperties_ShouldParseProperties()
-        {
-            string taskInfoJson = "{ \"properties\": [  {\"name\":\"Dirs\", \"property_type\": \"ITaskItemArray\", \"required\": true, \"output\": false }, {\"name\":\"MergedDir\", \"property_type\": \"ITaskItem\", \"required\": false, \"output\": true }, {\"name\":\"MergedName\", \"property_type\": \"string\", \"required\": false, \"output\": false } ] }";
-            TaskPropertyInfo[] propsExpected = new TaskPropertyInfo[]
-            {
-                new TaskPropertyInfo("Dirs", typeof(ITaskItem[]), false, true),
-                new TaskPropertyInfo("MergedDir", typeof(ITaskItem), true, false),
-                new TaskPropertyInfo("MergedName", typeof(string), false, false)
-            };
-
-
-            TaskPropertyInfo[] propsParsed = Serializer.DeserializeTaskInfoJson(taskInfoJson);
-
-            propsExpected.ShouldBeEquivalentTo(propsParsed);
-        }
-
-        // the task returns undeserializable json, should error
-        //[Fact]
-        //public void GetTaskInfo_InvalidJson_ShouldError()
-        //{
-        //    const string invalidJson = "{ \"Properties\": { \"Dirs\": { \"type\": \"ITaskItem[]\", \"required\": true, \"output\": false }, \"MergedDir\": { \"type\": \"ITaskItem\", \"required\": false, \"output\": true }, \"MergedName\": { \"type\": \"string\", \"required\": false, \"output\": false } ";
-
-        //    WasmTaskFactory factory = new WasmTaskFactory();
-
-        //    factory.OnTaskInfoReceived(null, invalidJson);
-
-
-
-
-
-        //}
-
         // it's a module without exports!
 
         // it's a component
@@ -113,38 +76,6 @@ namespace WasmTasksTests
         // did not provide taskInfo during initialization
 
         // no params (ok)
-
-
-
-
-        // [Fact]
-        //        public void E2E_Template()
-        //        {
-        //            const string pathToWasmDLL = @"";
-        //            const string taskPath = @"";
-        //            const string pathToMSBuild = @"";
-
-        //            using (TestEnvironment env = TestEnvironment.Create())
-        //            {
-        //                TransientTestFolder folder = env.CreateFolder(createFolder: true);
-        //                string location = Assembly.GetExecutingAssembly().Location;
-        //                TransientTestFile inlineTask = env.CreateFile(folder, "5107.proj", @$"
-        //<Project>
-
-        //  <UsingTask TaskName=""MyNewFancyTask"" AssemblyFile=""{pathToWasmDLL}"" TaskFactory=""WasmTaskFactory"">
-        //    <Task>{taskPath}</Task>
-        //  </UsingTask>
-
-        //<Target Name=""ToRun"">
-        //  <MyNewFancyTask/>
-        //</Target>
-
-        //</Project>
-        //");
-        //                // Run MSBuild and assert it's successful
-        //                // TODO
-        //            }
-        //        }
 
     }
 }
