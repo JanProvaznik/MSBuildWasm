@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MSBuildWasm" Version="0.2.0" />
+    <PackageReference Include="MSBuildWasm" Version="0.2.1" />
   </ItemGroup>
 
   <ItemGroup>

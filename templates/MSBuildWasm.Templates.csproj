@@ -13,7 +13,7 @@
     <NoWarn>$(NoWarn);NU5128</NoWarn>
     <IsPackable>true</IsPackable>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
-    <Version>0.1.0-alpha</Version>
+    <Version>0.1.1</Version>
     <PackageTags>MSBuild;Wasm;WebAssembly</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageIcon>msbuildwasmlogo.png</PackageIcon>
@@ -33,7 +33,7 @@
   
   <ItemGroup>
     <PackageReference Include="Microsoft.TemplateEngine.Tasks" Version="*" PrivateAssets="all" IsImplicitlyDefined="true" />
-    <PackageReference Include="MSBuildWasm" Version="0.2.0" />
+    <PackageReference Include="MSBuildWasm" Version="0.2.1" />
   </ItemGroup>
 
   <ItemGroup>

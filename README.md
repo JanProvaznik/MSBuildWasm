@@ -7,7 +7,10 @@
     - Rust example tasks [examples/]
 - The tasks run in a Wasm/WASI runtime - [Wasmtime](https://github.com/bytecodealliance/wasmtime) which sandboxes the execution from the rest of the system and files/directories a task allowed to touch have to be specified.
 
-see [spec](https://github.com/dotnet/msbuild/pull/10259) for details
+- see [spec](https://github.com/dotnet/msbuild/pull/10259) for details
+
+- State: Proof of concept, will not be maintained, outcome is that the WASI ecosystem is not ready for productization in MSBuild (Aug 2024)
+- Released as NuGet packages: [MSBuildWasm](https://www.nuget.org/packages/MSBuildWasm), [MSBuildWasm.Templates](https://www.nuget.org/packages/MSBuildWasm.Templates/)
 
 ## User manual
 Create a MSBuild task using Wasm/WASI toolchain.
@@ -30,10 +33,16 @@ Create a MSBuild task using Wasm/WASI toolchain.
 ```
 4. `dotnet build`
 
-Inputs and outputs from a tasks can be bools, strings and "ITaskItem" which is basically a file path.
-
 [Writing tasks for MSBuild](https://learn.microsoft.com/en-us/visualstudio/msbuild/task-writing)
 
+## Developer manual
+the [spec](https://github.com/dotnet/msbuild/pull/10259)
+elaborates how this package interplays with MSBuild and how to create a task
+
+### Running tests
+see `.github/workflows/dotnet.yml` action
+1. compile examples and template rust tasks to using `cargo` 
+2. `dotnet test test/WasmTasksTests`
 
 ## License
 This project is licensed under the MIT License - see the LICENSE file for details.
